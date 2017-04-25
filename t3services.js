@@ -112,9 +112,9 @@ class T3Service {
     /**
      * Gets whether a successful login has taken place.
      * @returns {boolean} Whether the client has a valid T3 token.
+     * @todo Check token expiration.
      */
     get isAuthenticated() {
-        // TODO: check for expiry?
         return this.auth && this.auth.T3Token && this.auth.T3Token.length > 0;
     }
 };
