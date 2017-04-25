@@ -1,5 +1,7 @@
 ﻿# T3 Authentication Module
 
+[![Build Status][travis-image]][travis-url] [![Coverage Status][coveralls-image]][coveralls-url]
+
 This is a module to handle authentication for the T3 speech services.
 
 ## Installation
