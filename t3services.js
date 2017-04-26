@@ -117,6 +117,9 @@ class T3Service {
     get isAuthenticated() {
         return this.auth && this.auth.T3Token && this.auth.T3Token.length > 0;
     }
+
+    search(query) {
+    }
 };
 
 module.exports = T3Service;
