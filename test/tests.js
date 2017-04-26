@@ -1,7 +1,7 @@
 var assert = require('assert');
 var sinon = require('sinon');
 var request = require('request');
-var T3Service = require('../t3services');
+var SmartCare = require('../smartcare');
 
 var validConfig = {
     endpoints: { login: 'https://t3.sc.com' },
@@ -18,49 +18,49 @@ var requiredParams = ['endpoints', 'customer', 'app', 'secret'];
 
 describe('constructor', function() {
     it('should throw on undefined config', function() {
-        assert.throws(() => new T3Service(), Error);
+        assert.throws(() => new SmartCare(), Error);
     });
     it('should throw on null config', function() {
-        assert.throws(() => new T3Service(null), Error);
+        assert.throws(() => new SmartCare(null), Error);
     });
     Object.keys(validConfig).forEach(prop => {
         it(`should throw on mistyped property ${prop}`, function() {
             let invalidConfig = Object.assign({}, validConfig);
             invalidConfig[prop] = function() { };
-            assert.throws(() => new T3Service(invalidConfig), TypeError);
+            assert.throws(() => new SmartCare(invalidConfig), TypeError);
         });
     });
     requiredParams.forEach(prop => {
         it(`should throw on undefined property ${prop}`, function() {
             let invalidConfig = Object.assign({}, validConfig);
             delete invalidConfig[prop];
-            assert.throws(() => new T3Service(invalidConfig), Error);
+            assert.throws(() => new SmartCare(invalidConfig), Error);
         });
         it(`should throw on null property ${prop}`, function() {
             let invalidConfig = Object.assign({}, validConfig);
             invalidConfig[prop] = null;
-            assert.throws(() => new T3Service(invalidConfig), Error);
+            assert.throws(() => new SmartCare(invalidConfig), Error);
         });
     });
     requiredParams.filter(v => typeof validConfig[v] === 'string').forEach(prop => {
         it(`should throw on empty string property ${prop}`, function() {
             let invalidConfig = Object.assign({}, validConfig);
             invalidConfig[prop] = "";
-            assert.throws(() => new T3Service(invalidConfig), Error);
+            assert.throws(() => new SmartCare(invalidConfig), Error);
         });
         it(`should throw on whitespace string property ${prop}`, function() {
             let invalidConfig = Object.assign({}, validConfig);
             invalidConfig[prop] = " \t ";
-            assert.throws(() => new T3Service(invalidConfig), Error);
+            assert.throws(() => new SmartCare(invalidConfig), Error);
         });
     });
     it('should not throw on valid config', function() {
-        assert.doesNotThrow(() => new T3Service(validConfig));
+        assert.doesNotThrow(() => new SmartCare(validConfig));
     });
 });
 
 describe('login()', function() {
-    var t3svc = new T3Service(validConfig);
+    var t3svc = new SmartCare(validConfig);
     var validHandlers = {
         onSuccess: function(rsp) { },
         onError: function(err) { }
@@ -197,7 +197,7 @@ describe('login()', function() {
         });
         it(`should POST with Authorization header`, function(done) {
             var config = Object.assign({ sessionId: '15344b6f-2131-2fa9-994e-c69103be9859' }, validConfig);
-            var t3client = new T3Service(config);
+            var t3client = new SmartCare(config);
             validHandlers.onError = err => { done(); };
             t3client.login("un", "pw", validHandlers);
 
@@ -268,7 +268,7 @@ describe('login()', function() {
         it(`should call onSuccess in verbose mode`, function(done) {
             var config = Object.assign({}, validConfig);
             config.verbose = true;
-            var t3client = new T3Service(config);
+            var t3client = new SmartCare(config);
             var rsp = { statusCode: 200 };
             var body = { test: 'aaa' };
             this.post.onSecondCall().callsArgWith(1, null, rsp, body);

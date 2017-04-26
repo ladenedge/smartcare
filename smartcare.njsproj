@@ -2,8 +2,8 @@
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">14.0</VisualStudioVersion>
     <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
-    <Name>t3services</Name>
-    <RootNamespace>t3services</RootNamespace>
+    <Name>smartcare</Name>
+    <RootNamespace>smartcare</RootNamespace>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -12,7 +12,7 @@
     <ProjectGuid>99f101ff-2a23-43df-851a-5bf7e2cd476a</ProjectGuid>
     <ProjectHome>
     </ProjectHome>
-    <StartupFile>t3services.js</StartupFile>
+    <StartupFile>smartcare.js</StartupFile>
     <StartWebBrowser>False</StartWebBrowser>
     <SearchPath>
     </SearchPath>
@@ -36,7 +36,7 @@
       <Publish>False</Publish>
       <TestFramework>Mocha</TestFramework>
     </Compile>
-    <Compile Include="t3services.js" />
+    <Compile Include="smartcare.js" />
     <Content Include="package.json" />
     <Content Include="README.md" />
   </ItemGroup>

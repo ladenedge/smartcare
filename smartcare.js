@@ -60,7 +60,7 @@ var endpointsSchema = [
 /**
  * Authentication module for the T3 speech services.
  */
-class T3Service {
+class SmartCare {
     /**
      * Constructs a T3 client with the supplied configuration.
      * @param {Object} config Configuration for the authentication procedure.
@@ -169,4 +169,4 @@ class T3Service {
     }
 };
 
-module.exports = T3Service;
+module.exports = SmartCare;

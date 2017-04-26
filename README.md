@@ -1,8 +1,8 @@
-﻿# T3 Authentication Module
+﻿# SmartCare Speech Services Module
 
 [![Build Status][travis-image]][travis-url] [![Coverage Status][coveralls-image]][coveralls-url]
 
-This is a module to handle authentication for the T3 speech services.
+This is a module to handle the client side of the SmartCare speech services.
 
 ## Installation
 
