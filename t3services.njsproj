@@ -30,7 +30,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="lib\insensitive-get.js" />
-    <Compile Include="lib\auth-token.js" />
+    <Compile Include="lib\t3util.js" />
     <Compile Include="lib\validate.js" />
     <Compile Include="test\tests.js">
       <Publish>False</Publish>
