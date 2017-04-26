@@ -6,19 +6,20 @@ var insensitiveGet = require('./lib/insensitive-get');
 var validator = require('./lib/validate');
 
 var configSchema = [
-    { key: 'endpoints', type: 'Array', req: true },
-    { key: 'proxy', type: 'string', req: false },
+    { key: 'endpoints', type: 'object', req: true },
     { key: 'customer', type: 'string', req: true },
     { key: 'app', type: 'string', req: true },
     { key: 'secret', type: 'string', req: true },
-    { key: 'agent', type: 'string', req: false },
+    { key: 'name', type: 'string', req: false },
+    { key: 'platform', type: 'string', req: false },
     { key: 'verbose', type: 'boolean', req: false }
 ];
 
 var endpointsSchema = [
-    { key: 'login', type: 'string', req: true },
-    { key: 'search', type: 'string', req: true },
-    { key: 'account', type: 'string', req: true },
+    { key: 'login', type: 'string', req: false },
+    { key: 'search', type: 'string', req: false },
+    { key: 'account', type: 'string', req: false },
+    { key: 'proxy', type: 'string', req: false }
 ];
 
 /**
@@ -63,11 +64,16 @@ class T3Service {
     /**
      * Constructs a T3 client with the supplied configuration.
      * @param {Object} config Configuration for the authentication procedure.
-     * @param {string} config.endpoint Full URL to the T3 auth service.
-     * @param {string} [config.proxy] Optional proxy endpoint.
+     * @param {Object} config.endpoints Set of endpoints for individual T3 services.
+     * @param {string} config.endpoints.login Full endpoint for the authentication service.
+     * @param {string} config.endpoints.search Full endpoint for the T3 search service.
+     * @param {string} config.endpoints.account Full endpoint for the account and billing service.
+     * @param {string} [config.endpoints.proxy] Optional proxy endpoint.
      * @param {string} config.customer Identifier of the customer/tenant.
      * @param {string} config.app Identifier of the calling application.
      * @param {string} config.secret The shared secret to use during authentication.
+     * @param {string} [config.platform] The platform on which the application is running. (Eg. 'Web', 'DesktopWeb'.)
+     * @param {string} [config.name] A name or identifier for the calling application.
      * @param {boolean} [config.verbose] Whether to output detailed logging to stderr.
      */
     constructor(config) {
@@ -86,6 +92,7 @@ class T3Service {
     login(username, password, responseHandlers) {
         username = validator.validateString(username, 'username');
         password = validator.validateString(password, 'password');
+        validator.validateString(this.t3config.endpoints.login, 'login endpoint');
         validator.validateResponseHandlers(responseHandlers);
 
         var opts = t3util.requestOptions(this.t3config);
@@ -140,6 +147,7 @@ class T3Service {
      */
     search(query, responseHandlers) {
         query = validator.validateString(query, 'query');
+        validator.validateString(this.t3config.endpoints.search, 'search endpoint');
         validator.validateResponseHandlers(responseHandlers);
 
         var opts = t3util.requestOptions(this.t3config);

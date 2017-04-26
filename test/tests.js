@@ -1,11 +1,10 @@
-/* eslint-env mocha */
 var assert = require('assert');
 var sinon = require('sinon');
 var request = require('request');
 var T3Service = require('../t3services');
 
 var validConfig = {
-    endpoint: 'https://t3.sc.com',
+    endpoints: { login: 'https://t3.sc.com' },
     customer: 'Tester',
     app: 'Mocha',
     secret: 'secret',
@@ -14,7 +13,7 @@ var validConfig = {
 
 var badStringValues = [null, "", " \t ", 1];
 var badHandlerValues = [null, ""];
-var requiredParams = ['endpoint', 'customer', 'app', 'secret'];
+var requiredParams = ['endpoints', 'customer', 'app', 'secret'];
 
 
 describe('constructor', function() {
@@ -114,7 +113,7 @@ describe('login()', function() {
     });
     describe('initial request', function() {
         [
-            { key: 'url', val: validConfig.endpoint },
+            { key: 'url', val: validConfig.endpoints.login },
         ].forEach(opt => {
             it(`should get configured ${opt.key}`, function() {
                 t3svc.login("un", "pw", validHandlers);
