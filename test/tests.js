@@ -12,7 +12,11 @@ var validConfig = {
     customer: 'Tester',
     app: 'Mocha',
     secret: 'secret',
-    verbose: false
+    verbose: false,
+
+    clone: function () {
+        return JSON.parse(JSON.stringify(this));
+    }
 };
 
 var badStringValues = [null, "", " \t ", 1];
@@ -28,32 +32,34 @@ describe('constructor', function() {
         assert.throws(() => new SmartCare(null), Error);
     });
     Object.keys(validConfig).forEach(prop => {
+        if (prop === 'clone')
+            return;
         it(`should throw on mistyped property ${prop}`, function() {
-            let invalidConfig = Object.assign({}, validConfig);
+            let invalidConfig = validConfig.clone();
             invalidConfig[prop] = function() { };
             assert.throws(() => new SmartCare(invalidConfig), TypeError);
         });
     });
     requiredParams.forEach(prop => {
         it(`should throw on undefined property ${prop}`, function() {
-            let invalidConfig = Object.assign({}, validConfig);
+            let invalidConfig = validConfig.clone();
             delete invalidConfig[prop];
             assert.throws(() => new SmartCare(invalidConfig), Error);
         });
         it(`should throw on null property ${prop}`, function() {
-            let invalidConfig = Object.assign({}, validConfig);
+            let invalidConfig = validConfig.clone();
             invalidConfig[prop] = null;
             assert.throws(() => new SmartCare(invalidConfig), Error);
         });
     });
     requiredParams.filter(v => typeof validConfig[v] === 'string').forEach(prop => {
         it(`should throw on empty string property ${prop}`, function() {
-            let invalidConfig = Object.assign({}, validConfig);
+            let invalidConfig = validConfig.clone();
             invalidConfig[prop] = "";
             assert.throws(() => new SmartCare(invalidConfig), Error);
         });
         it(`should throw on whitespace string property ${prop}`, function() {
-            let invalidConfig = Object.assign({}, validConfig);
+            let invalidConfig = validConfig.clone();
             invalidConfig[prop] = " \t ";
             assert.throws(() => new SmartCare(invalidConfig), Error);
         });
@@ -92,6 +98,12 @@ describe('login()', function() {
         it(`should throw when password is '${arg}'`, function() {
             assert.throws(() => smartcare.login("un", arg, validHandlers), Error);
         });
+    });
+    it(`should throw without login endpoint`, function () {
+        var config = validConfig.clone();
+        delete config.endpoints.login;
+        var scclient = new SmartCare(config);
+        assert.throws(() => scclient.login("un", "pw", validHandlers), Error);
     });
     it(`should throw when handlers are undefined`, function() {
         assert.throws(() => smartcare.login("un", "pw"), Error);
@@ -191,8 +203,6 @@ describe('login()', function() {
             'X-SpeechCycle-SmartCare-SessionID',
             'X-SpeechCycle-SmartCare-CustomerID',
             'X-SpeechCycle-SmartCare-ApplicationID',
-            'Content-Type',
-            'Accept'
         ].forEach(hdr => {
             it(`should POST with same ${hdr} header`, function(done) {
                 validHandlers.onError = err => { done(); };
@@ -201,17 +211,18 @@ describe('login()', function() {
                 assert.equal(this.post.secondCall.args[0]['headers'][hdr], this.post.firstCall.args[0]['headers'][hdr]);
             });
         });
-        it(`should POST with Authorization header`, function(done) {
-            var config = Object.assign({ sessionId: '15344b6f-2131-2fa9-994e-c69103be9859' }, validConfig);
-            var t3client = new SmartCare(config);
+        it(`should POST with Authorization header`, function (done) {
+            var config = validConfig.clone();
+            config.sessionId = '15344b6f-2131-2fa9-994e-c69103be9859';
+            var scclient = new SmartCare(config);
             validHandlers.onError = err => { done(); };
-            t3client.login("un", "pw", validHandlers);
+            scclient.login("un", "pw", validHandlers);
 
             var expected = rsp.headers["WWW-Authenticate"] + ', token="IX2y+8igk6nCN3iAw77tPoOTx74="';
             assert.equal(this.post.secondCall.args[0]['headers']['Authorization'], expected);
         });
         [
-            'WWW-Authenticate', 'www-authenticate', 'WwW-aUtHeNtIcAtE'
+            'WWW-Authenticate', 'www-authenticate'
         ].forEach(hdr => {
             it(`should POST with Authorization header from ${hdr} header`, function(done) {
                 var rsp = { headers: {} };
@@ -272,7 +283,7 @@ describe('login()', function() {
             smartcare.login("un", "pw", validHandlers);
         });
         it(`should call onSuccess in verbose mode`, function(done) {
-            var config = Object.assign({}, validConfig);
+            var config = validConfig.clone();
             config.verbose = true;
             var t3client = new SmartCare(config);
             var rsp = { statusCode: 200 };
@@ -285,6 +296,95 @@ describe('login()', function() {
             };
             t3client.login("un", "pw", validHandlers);
         });
+    });
+});
+
+describe('isAuthenticated', function () {
+    var smartcare = new SmartCare(validConfig);
+    var validHandlers = {
+        onSuccess: function (rsp) { },
+        onError: function (err) { }
+    };
+    var validFirstResponse = { headers: { "WWW-Authenticate": "T3Auth aaa" } };
+    var validSecondResponse = { statusCode: 200 };
+
+    beforeEach(function () {
+        // A Sinon stub replaces the target function, so no need for DI.
+        this.post = sinon.stub(request, 'post');
+        this.post.callsArgWith(1, null, validFirstResponse);
+    });
+    afterEach(function () {
+        request.post.restore();
+    });
+
+    it('should be false before login', function () {
+        assert(!smartcare.isAuthenticated);
+    });
+    it(`should be false when T3Token is undefined`, function (done) {
+        var body = { test: 'aaa' };
+        this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
+
+        validHandlers.onSuccess = rsp => { done(); };
+        smartcare.login("un", "pw", validHandlers);
+
+        assert(!smartcare.isAuthenticated);
+    });
+    [null, ""].forEach(val => {
+        it(`should be false when T3Token is '${val}'`, function (done) {
+            var body = { test: 'aaa' };
+            this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
+
+            validHandlers.onSuccess = rsp => { done(); };
+            smartcare.login("un", "pw", validHandlers);
+
+            assert(!smartcare.isAuthenticated);
+        });
+    });
+    it(`should be true when T3Token is non-empty`, function (done) {
+        var body = { T3Token: 'aaa' };
+        this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
+
+        validHandlers.onSuccess = rsp => { done(); };
+        smartcare.login("un", "pw", validHandlers);
+
+        assert(smartcare.isAuthenticated);
+    });
+});
+
+describe('hasActions', function () {
+    var smartcare = new SmartCare(validConfig);
+    var validHandlers = {
+        onSuccess: function (rsp) { },
+        onError: function (err) { }
+    };
+    var validResponse = { statusCode: 200 };
+    var validBody = {
+        ServiceItems: [{
+            "Action": "Home_Dashboard",
+        }],
+        Actions: [{
+            "Name": "Home_Dashboard",
+        }]
+    }
+
+    beforeEach(function () {
+        // A Sinon stub replaces the target function, so no need for DI.
+        this.get = sinon.stub(request, 'get');
+    });
+    afterEach(function () {
+        request.get.restore();
+    });
+
+    it('should be false before refreshTouchmap', function () {
+        assert(!smartcare.hasActions);
+    });
+    it(`should be true when actions are present`, function (done) {
+        this.get.callsArgWith(1, null, validResponse, validBody);
+
+        validHandlers.onSuccess = rsp => { done(); };
+        smartcare.refreshTouchmap(validHandlers);
+
+        assert(smartcare.hasActions);
     });
 });
 
@@ -302,6 +402,12 @@ describe('refreshTouchmap()', function() {
         request.get.restore();
     });
 
+    it(`should throw without search endpoint`, function () {
+        var config = validConfig.clone();
+        delete config.endpoints.search;
+        var scclient = new SmartCare(config);
+        assert.throws(() => scclient.refreshTouchmap(validHandlers), Error);
+    });
     it(`should throw when handlers are undefined`, function() {
         assert.throws(() => smartcare.refreshTouchmap(), Error);
     });
@@ -392,12 +498,22 @@ describe('refreshTouchmap()', function() {
             };
             smartcare.refreshTouchmap(validHandlers);
         });
-        it(`should call onSuccess on 200 OK`, function(done) {
+        it(`should call onSuccess on 200 OK`, function (done) {
             var rsp = { statusCode: 200 }
             this.get.callsArgWith(1, null, rsp, validBody);
 
             validHandlers.onSuccess = rsp => { done(); };
             smartcare.refreshTouchmap(validHandlers);
+        });
+        it(`should call onSuccess in verbose mode`, function (done) {
+            var config = validConfig.clone();
+            config.verbose = true;
+            var scclient = new SmartCare(config);
+            var rsp = { statusCode: 200 }
+            this.get.callsArgWith(1, null, rsp, validBody);
+
+            validHandlers.onSuccess = rsp => { done(); };
+            scclient.refreshTouchmap(validHandlers);
         });
         it(`should save Actions`, function (done) {
             var rsp = { statusCode: 200 }

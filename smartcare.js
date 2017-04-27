@@ -138,13 +138,12 @@ class SmartCare {
     }
 
     /**
-     * Gets whether the action/service item map is cached and current.
+     * Gets whether the action/menu map is cached and current.
      * @returns {boolean} Whether the client has a valid T3 touchmap.
      * @todo Check map expiration.
      */
     get hasActions() {
-        return this.menu && typeof this.menu === 'array' && this.menu.length > 0 &&
-            this.actions && this.actions.hasOwnProperty('refreshTime');
+        return this.actions && this.actions.hasOwnProperty('refreshTime');
     }
 
     /**
@@ -154,6 +153,7 @@ class SmartCare {
      * @param {onError} responseHandlers.onError Function to call in case of error.
      */
     refreshTouchmap(responseHandlers) {
+        validator.validateString(this.config.endpoints.search, 'search endpoint');
         validator.validateResponseHandlers(responseHandlers);
 
         var opts = t3util.requestOptions(this.config);
