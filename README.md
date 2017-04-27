@@ -1,6 +1,7 @@
 ﻿# SmartCare Speech Services Module
 
-[![Build Status][travis-image]][travis-url] [![Coverage Status][coveralls-image]][coveralls-url]
+
+[![Coverage Status](https://coveralls.io/repos/github/ladenedge/smartcare/badge.svg)](https://coveralls.io/github/ladenedge/smartcare)
 
 This is a module to handle the client side of the SmartCare speech services.
 
