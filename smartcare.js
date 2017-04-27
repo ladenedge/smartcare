@@ -134,7 +134,7 @@ class SmartCare {
      * @todo Check token expiration.
      */
     get isAuthenticated() {
-        return this.auth && this.auth.T3Token && this.auth.T3Token.length > 0;
+        return !!this.auth && !!this.auth.T3Token && this.auth.T3Token.length > 0;
     }
 
     /**
@@ -143,7 +143,7 @@ class SmartCare {
      * @todo Check map expiration.
      */
     get hasActions() {
-        return this.actions && this.actions.hasOwnProperty('refreshTime');
+        return !!this.actions && this.actions.hasOwnProperty('refreshTime');
     }
 
     /**
@@ -199,6 +199,7 @@ class SmartCare {
         var performSearch = () => {
             var opts = t3util.requestOptions(this.config);
             opts.url = this.config.endpoints.search + '/simple';
+            opts.json = {};
             opts.qs = { text: query };
 
             request.debug = !!this.config.verbose;
@@ -211,7 +212,8 @@ class SmartCare {
                     console.error(body);
 
                 body.Results.forEach(a => {
-                    a.Action = this.actions[a.Action];
+                    if (typeof a.Action !== 'object')
+                        a.Action = this.actions[a.Action];
                 });
 
                 responseHandlers.onSuccess(body);

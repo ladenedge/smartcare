@@ -461,16 +461,6 @@ describe('refreshTouchmap()', function() {
             }],
             Actions: [{
                 "Name": "Home_Dashboard",
-                "Targets": [{
-                    "Platform": "Default",
-                    "Type": "Web",
-                    "Resource": "http://t3dev.speechcycle.com/smartcare/dashboard/sign-in"
-                }],
-                "Variables": null,
-                "Constants": [{
-                    "Name": "title",
-                    "Value": "My Account"
-                }]
             }]
         }
         beforeEach(function () {
@@ -523,6 +513,189 @@ describe('refreshTouchmap()', function() {
             smartcare.refreshTouchmap(validHandlers);
 
             assert(smartcare.hasActions);
+        });
+    });
+});
+
+describe('search()', function () {
+    var smartcare = new SmartCare(validConfig);
+    var validHandlers = {
+        onSuccess: function (rsp) { },
+        onError: function (err) { }
+    };
+    var validActions = {
+        refreshTime: new Date(),
+        "Home_Dashboard": {
+            "Name": "Home_Dashboard",
+        }
+    };
+    var validBody = {
+        Results: [{
+            Action: "Home_Dashboard"
+        }]
+    };
+
+    beforeEach(function () {
+        this.get = sinon.stub(request, 'get');
+        smartcare.actions = validActions;
+    });
+    afterEach(function () {
+        request.get.restore();
+    });
+
+    it(`should throw without search endpoint`, function () {
+        var config = validConfig.clone();
+        delete config.endpoints.search;
+        var scclient = new SmartCare(config);
+        assert.throws(() => scclient.search('query', validHandlers), Error);
+    });
+    badStringValues.forEach(arg => {
+        it(`should throw when query is '${arg}'`, function () {
+            assert.throws(() => smartcare.search(arg, validHandlers), Error);
+        });
+    });
+    it(`should throw when handlers are undefined`, function () {
+        assert.throws(() => smartcare.search('query'), Error);
+    });
+    it(`should throw when handlers are null`, function () {
+        assert.throws(() => smartcare.search('query', null), Error);
+    });
+    Object.keys(validHandlers).forEach(hand => {
+        it(`should throw when ${hand} handler is missing`, function () {
+            let invalidHandlers = Object.assign({}, validHandlers);
+            delete invalidHandlers[hand];
+            assert.throws(() => smartcare.search('query', invalidHandlers), Error);
+        });
+    });
+    Object.keys(validHandlers).forEach(hand => {
+        badHandlerValues.forEach(val => {
+            it(`should throw when ${hand} handler is '${val}'`, function () {
+                let invalidHandlers = Object.assign({}, validHandlers);
+                invalidHandlers[hand] = val;
+                assert.throws(() => smartcare.search('query', invalidHandlers), Error);
+            });
+        });
+    });
+    it(`should refresh touchmap when hasActions is false`, function () {
+        delete smartcare.actions;
+        smartcare.search('query', validHandlers);
+        assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.search + '/touch-map');
+    });
+    it(`should call onError when refreshTouchmap fails`, function (done) {
+        delete smartcare.actions;
+        var err = new Error('aaa');
+        this.get.onFirstCall().callsArgWith(1, err);
+
+        validHandlers.onError = err => {
+            assert.equal(err.message, 'aaa');
+            done();
+        };
+        smartcare.search('query', validHandlers);
+    });
+    it(`should perform search after refreshTouchmap`, function (done) {
+        delete smartcare.actions;
+        var validBody = {
+            QueryMaps: null,
+            ServiceItems: [{ "Action": "Home_Dashboard", }],
+            Actions: [{ "Name": "Home_Dashboard", }]
+        }
+        var err = new Error('aaa');
+        this.get.onFirstCall().callsArgWith(1, null, { statusCode: 200 }, validBody);
+        this.get.onSecondCall().callsArgWith(1, err);
+
+        validHandlers.onError = err => {
+            assert.equal(err.message, 'aaa');
+            done();
+        };
+        smartcare.search('query', validHandlers);
+    });
+    it(`should skip refresh when hasActions is false`, function () {
+        smartcare.search('query', validHandlers);
+        assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.search + '/simple');
+    });
+    describe('request', function () {
+        it(`should get configured url`, function () {
+            smartcare.search('query', validHandlers);
+            assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.search + '/simple');
+        });
+        it(`should enable json`, function () {
+            smartcare.search('query', validHandlers);
+            assert(this.get.firstCall.args[0].json);
+        });
+        it(`should add query string`, function () {
+            smartcare.search('query', validHandlers);
+            assert.equal(this.get.firstCall.args[0].qs.text, 'query');
+        });
+        [
+            { name: 'X-SpeechCycle-SmartCare-CustomerID', val: validConfig.customer },
+            { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
+        ].forEach(opt => {
+            it(`should get HTTP header ${opt.name}`, function () {
+                smartcare.search('query', validHandlers);
+                assert.equal(this.get.firstCall.args[0]['headers'][opt.name], opt.val);
+            });
+        });
+        it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function () {
+            smartcare.search('query', validHandlers);
+            assert(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
+        });
+    });
+    describe('response', function (done) {
+        var validResponse = { statusCode: 200 }
+
+        it(`should call onError on error`, function (done) {
+            var err = new Error('aaa');
+            this.get.callsArgWith(1, err);
+
+            validHandlers.onError = err => {
+                assert.equal(err.message, 'aaa');
+                done();
+            };
+            smartcare.search('query', validHandlers);
+        });
+        it(`should call onError on non-200 status code`, function (done) {
+            var rsp = { statusCode: 400 };
+            this.get.callsArgWith(1, null, rsp);
+
+            validHandlers.onError = err => {
+                assert.equal(err.message, 'Search failed');
+                done();
+            };
+            smartcare.search('query', validHandlers);
+        });
+        it(`should call onSuccess on 200 OK`, function (done) {
+            this.get.callsArgWith(1, null, validResponse, validBody);
+
+            validHandlers.onSuccess = rsp => { done(); };
+            smartcare.search('query', validHandlers);
+        });
+        it(`should call onSuccess in verbose mode`, function (done) {
+            var config = validConfig.clone();
+            config.verbose = true;
+            var scclient = new SmartCare(config);
+            scclient.actions = validActions;
+            this.get.callsArgWith(1, null, validResponse, validBody);
+
+            validHandlers.onSuccess = rsp => { done(); };
+            scclient.search('query', validHandlers);
+        });
+        it(`should call onSuccess with results`, function (done) {
+            this.get.callsArgWith(1, null, validResponse, validBody);
+
+            validHandlers.onSuccess = rsp => {
+                assert(rsp.Results.length > 0);
+                done();
+            };
+            smartcare.search('query', validHandlers);
+        });
+        it(`should populate results with action objects`, function (done) {
+            this.get.callsArgWith(1, null, validResponse, validBody);
+
+            validHandlers.onSuccess = rsp => {
+                assert.equal(typeof rsp.Results[0].Action, 'object');
+                done();
+            };
+            smartcare.search('query', validHandlers);
         });
     });
 });
