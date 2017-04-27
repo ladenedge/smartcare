@@ -50,5 +50,6 @@ Temporary Items
 node_modules
 bin
 obj
+misc
 coverage
 out
