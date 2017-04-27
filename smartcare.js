@@ -48,7 +48,7 @@ var endpointsSchema = [
 /**
  * Function called on successful authentication attempts.
  * @callback onSuccess  
- * @param {AuthToken|Action} response An object created from the body of the successful response.
+ * @param {AuthToken|Action|undefined} response An object created from the body of the successful response.
  */
 
 /**
@@ -77,8 +77,8 @@ class SmartCare {
      * @param {boolean} [config.verbose] Whether to output detailed logging to stderr.
      */
     constructor(config) {
-        this.t3config = validator.validateConfig(config, configSchema);
-        this.t3config.endpoints = validator.validateConfig(config.endpoints, endpointsSchema);
+        this.config = validator.validateConfig(config, configSchema);
+        this.config.endpoints = validator.validateConfig(config.endpoints, endpointsSchema);
     }
 
     /**
@@ -92,18 +92,18 @@ class SmartCare {
     login(username, password, responseHandlers) {
         username = validator.validateString(username, 'username');
         password = validator.validateString(password, 'password');
-        validator.validateString(this.t3config.endpoints.login, 'login endpoint');
+        validator.validateString(this.config.endpoints.login, 'login endpoint');
         validator.validateResponseHandlers(responseHandlers);
 
-        var opts = t3util.requestOptions(this.t3config);
-        opts.url = this.t3config.endpoints.login;
+        var opts = t3util.requestOptions(this.config);
+        opts.url = this.config.endpoints.login;
         opts.json = {
             'ID': username,
             'Password': password,
             'AdditionalValuesVersion': '2'
         };
 
-        request.debug = !!this.t3config.verbose;
+        request.debug = !!this.config.verbose;
         request.post(opts, (error, rsp, body) => {
             if (error)
                 responseHandlers.onError(error);
@@ -111,16 +111,15 @@ class SmartCare {
             if (!authHeader || !authHeader.match(/^T3Auth /i))
                 responseHandlers.onError(new Error('Challenge not found'));
 
-            var token = t3util.createToken(this.t3config, opts.headers['X-SpeechCycle-SmartCare-SessionID']);
+            var token = t3util.createToken(this.config, opts.headers['X-SpeechCycle-SmartCare-SessionID']);
             opts.headers['Authorization'] = authHeader + `, token=${token}`;
 
             request.post(opts, (error, rsp, body) => {
                 if (error)
-                    responseHandlers.onError(error);
+                    return responseHandlers.onError(error);
                 if (rsp.statusCode !== 200)
-                    responseHandlers.onError(new Error('Authentication failed'));
-
-                if (this.t3config.verbose)
+                    return responseHandlers.onError(new Error('Authentication failed'));
+                if (this.config.verbose)
                     console.error(body);
 
                 this.auth = Object.assign({}, body);
@@ -139,6 +138,53 @@ class SmartCare {
     }
 
     /**
+     * Gets whether the action/service item map is cached and current.
+     * @returns {boolean} Whether the client has a valid T3 touchmap.
+     * @todo Check map expiration.
+     */
+    get hasActions() {
+        return this.menu && typeof this.menu === 'array' && this.menu.length > 0 &&
+            this.actions && this.actions.hasOwnProperty('refreshTime');
+    }
+
+    /**
+     * Updates the menu items and actions database (ie. the "touchmap").
+     * @param {Object} responseHandlers An object that contains callbacks for search results.
+     * @param {onSuccess} responseHandlers.onSuccess Function to call if the refresh is successful.
+     * @param {onError} responseHandlers.onError Function to call in case of error.
+     */
+    refreshTouchmap(responseHandlers) {
+        validator.validateResponseHandlers(responseHandlers);
+
+        var opts = t3util.requestOptions(this.config);
+        opts.url = this.config.endpoints.search + '/touch-map';
+
+        request.debug = !!this.config.verbose;
+        request.get(opts, (error, rsp, body) => {
+            if (error)
+                return responseHandlers.onError(error);
+            if (rsp.statusCode !== 200)
+                return responseHandlers.onError(new Error('Touchmap refresh failed'));
+            if (this.config.verbose)
+                console.error(body);
+
+            this.menu = body.ServiceItems
+                .filter(si => body.Actions.find(a => a.Name == si.Action))
+                .map(si => {
+                    si.Action = body.Actions.find(a => a.Name == si.Action);
+                    return si;
+                });
+
+            this.actions = { refreshTime: new Date() };
+            body.Actions.forEach(a => {
+                this.actions[a.Name] = a;
+            });
+
+            responseHandlers.onSuccess();
+        });
+    }
+
+    /**
      * Searches for actions related to a query by a user.
      * @param {string} query User's search query.
      * @param {Object} responseHandlers An object that contains callbacks for search results.
@@ -147,25 +193,39 @@ class SmartCare {
      */
     search(query, responseHandlers) {
         query = validator.validateString(query, 'query');
-        validator.validateString(this.t3config.endpoints.search, 'search endpoint');
+        validator.validateString(this.config.endpoints.search, 'search endpoint');
         validator.validateResponseHandlers(responseHandlers);
 
-        var opts = t3util.requestOptions(this.t3config);
-        opts.url = this.t3config.endpoints.search + '/simple';
-        opts.qs = { text: query };
+        var performSearch = () => {
+            var opts = t3util.requestOptions(this.config);
+            opts.url = this.config.endpoints.search + '/simple';
+            opts.qs = { text: query };
 
-        request.debug = !!this.t3config.verbose;
-        request.post(opts, (error, rsp, body) => {
-            if (error)
-                responseHandlers.onError(error);
-            if (rsp.statusCode !== 200)
-                responseHandlers.onError(new Error('Search failed'));
+            request.debug = !!this.config.verbose;
+            request.get(opts, (error, rsp, body) => {
+                if (error)
+                    return responseHandlers.onError(error);
+                if (rsp.statusCode !== 200)
+                    return responseHandlers.onError(new Error('Search failed'));
+                if (this.config.verbose)
+                    console.error(body);
 
-            if (this.t3config.verbose)
-                console.error(body);
+                body.Results.forEach(a => {
+                    a.Action = this.actions[a.Action];
+                });
 
-            responseHandlers.onSuccess(body);
-        });
+                responseHandlers.onSuccess(body);
+            });
+        };
+
+        if (this.hasActions)
+            performSearch();
+        else {
+            this.refreshTouchmap({
+                onError: responseHandlers.onError,
+                onSuccess: () => { performSearch(); }
+            });
+        }
     }
 };
 
