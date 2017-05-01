@@ -1,6 +1,6 @@
 {
   "name": "smartcare",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Client side module for the SmartCare speech services API.",
   "author": {
     "name": "Jay Miller",
