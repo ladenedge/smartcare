@@ -1,4 +1,4 @@
-'use strict'
+'use strict';
 
 var request = require('request');
 var t3util = require('./lib/t3util');
@@ -62,12 +62,12 @@ var endpointsSchema = [
  */
 class SmartCare {
     /**
-     * Constructs a T3 client with the supplied configuration.
-     * @param {Object} config Configuration for the authentication procedure.
-     * @param {Object} config.endpoints Set of endpoints for individual T3 services.
-     * @param {string} config.endpoints.login Full endpoint for the authentication service.
-     * @param {string} config.endpoints.search Full endpoint for the T3 search service.
-     * @param {string} config.endpoints.account Full endpoint for the account and billing service.
+     * Constructs a SmartCare client with the supplied configuration.
+     * @param {Object} config Configuration for the module.
+     * @param {Object} config.endpoints Set of endpoints for individual SmartCare services.  Only those endpoints that will be used are required.
+     * @param {string} [config.endpoints.login] Full endpoint for the authentication service.
+     * @param {string} [config.endpoints.search] Full endpoint for the T3 search service.
+     * @param {string} [config.endpoints.account] Full endpoint for the account and billing service.
      * @param {string} [config.endpoints.proxy] Optional proxy endpoint.
      * @param {string} config.customer Identifier of the customer/tenant.
      * @param {string} config.app Identifier of the calling application.
@@ -199,7 +199,6 @@ class SmartCare {
         var performSearch = () => {
             var opts = t3util.requestOptions(this.config);
             opts.url = this.config.endpoints.search + '/simple';
-            opts.json = {};
             opts.qs = { text: query };
 
             request.debug = !!this.config.verbose;
@@ -228,6 +227,69 @@ class SmartCare {
                 onSuccess: () => { performSearch(); }
             });
         }
+    }
+
+    /**
+     * Retrieves an authenticated user's account information.
+     * @param {Object} responseHandlers An object that contains callbacks for account results.
+     * @param {onSuccess} responseHandlers.onSuccess Function to call if the lookup is successful.
+     * @param {onError} responseHandlers.onError Function to call in case of error.
+     */
+    getAccount(responseHandlers) {
+        validator.validateString(this.config.endpoints.account, 'account endpoint');
+        validator.validateResponseHandlers(responseHandlers);
+        if (!this.isAuthenticated)
+            throw new Error('An active login is required');
+
+        var opts = t3util.requestOptions(this.config);
+        opts.url = this.config.endpoints.account + '/account/get-by-number';
+        Object.assign(opts.headers, t3util.authHeaders(this.auth));
+
+        request.debug = !!this.config.verbose;
+        request.get(opts, (error, rsp, body) => {
+            if (error)
+                return responseHandlers.onError(error);
+            if (rsp.statusCode !== 200)
+                return responseHandlers.onError(new Error('Account lookup failed'));
+            if (this.config.verbose)
+                console.error(body);
+
+            responseHandlers.onSuccess(body);
+        });
+    }
+
+    /**
+     * Retrieves an authenticated user's statements.
+     * @param {number} count The number of statements to retrieve, starting with the latest.  Must be at least 1.
+     * @param {boolean} pdfs Whether to get the statements in PDF form or JSON.
+     * @param {Object} responseHandlers An object that contains callbacks for statement results.
+     * @param {onSuccess} responseHandlers.onSuccess Function to call if the lookup is successful.
+     * @param {onError} responseHandlers.onError Function to call in case of error.
+     */
+    getStatements(count, pdf, responseHandlers) {
+        validator.validateNumber(count, 1, 'count');
+        validator.validateBoolean(pdf, 'pdf');
+        validator.validateString(this.config.endpoints.account, 'account endpoint');
+        validator.validateResponseHandlers(responseHandlers);
+        if (!this.isAuthenticated)
+            throw new Error('An active login is required');
+
+        var opts = t3util.requestOptions(this.config);
+        var path = '/' + (pdf ? 'pdf-statement' : 'bill') + '/' + count;
+        opts.url = this.config.endpoints.account + path;
+        Object.assign(opts.headers, t3util.authHeaders(this.auth));
+
+        request.debug = !!this.config.verbose;
+        request.get(opts, (error, rsp, body) => {
+            if (error)
+                return responseHandlers.onError(error);
+            if (rsp.statusCode !== 200)
+                return responseHandlers.onError(new Error('Account lookup failed'));
+            if (this.config.verbose)
+                console.error(body);
+
+            responseHandlers.onSuccess(body);
+        });
     }
 };
 
