@@ -1,6 +1,6 @@
 {
   "name": "smartcare",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Client side module for the SmartCare speech services API.",
   "author": {
     "name": "Jay Miller",
@@ -11,8 +11,8 @@
     "deploy-prod": "npm run local-test && npm run version-patch && npm run push-tags",
     "test": "istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage",
     "local-test": "istanbul cover node_modules/mocha/bin/_mocha -- -R spec",
-	"version-patch": "npm version patch",
-	"push-tags": "git push --tags"
+    "version-patch": "npm version patch",
+    "push-tags": "git push --tags"
   },
   "dependencies": {
     "crypto-js": "^3.1.9-1",
