@@ -388,6 +388,43 @@ describe('hasActions', function () {
     });
 });
 
+describe('hasMenu', function () {
+    var smartcare = new SmartCare(validConfig);
+    var validHandlers = {
+        onSuccess: function (rsp) { },
+        onError: function (err) { }
+    };
+    var validResponse = { statusCode: 200 };
+    var validBody = {
+        ServiceItems: [{
+            "Action": "Home_Dashboard",
+        }],
+        Actions: [{
+            "Name": "Home_Dashboard",
+        }]
+    }
+
+    beforeEach(function () {
+        // A Sinon stub replaces the target function, so no need for DI.
+        this.get = sinon.stub(request, 'get');
+    });
+    afterEach(function () {
+        request.get.restore();
+    });
+
+    it('should be false before refreshTouchmap', function () {
+        assert(!smartcare.hasMenu);
+    });
+    it(`should be true when actions are present`, function (done) {
+        this.get.callsArgWith(1, null, validResponse, validBody);
+
+        validHandlers.onSuccess = rsp => { done(); };
+        smartcare.refreshTouchmap(validHandlers);
+
+        assert(smartcare.hasMenu);
+    });
+});
+
 describe('refreshTouchmap()', function() {
     var smartcare = new SmartCare(validConfig);
     var validHandlers = {
