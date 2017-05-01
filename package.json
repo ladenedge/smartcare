@@ -8,8 +8,11 @@
   },
   "license": "MIT",
   "scripts": {
+    "deploy-prod": "npm run local-test && npm run version-patch && npm run push-tags",
     "test": "istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage",
-    "local-test": "istanbul cover node_modules/mocha/bin/_mocha -- -R spec"
+    "local-test": "istanbul cover node_modules/mocha/bin/_mocha -- -R spec",
+	"version-patch": "npm version patch",
+	"push-tags": "git push --tags"
   },
   "dependencies": {
     "crypto-js": "^3.1.9-1",
