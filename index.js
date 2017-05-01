@@ -138,7 +138,16 @@ class SmartCare {
     }
 
     /**
-     * Gets whether the action/menu map is cached and current.
+     * Gets whether the menu map is cached and current.
+     * @returns {boolean} Whether the client has a valid T3 menu.
+     * @todo Check menu expiration.
+     */
+    get hasMenu() {
+        return !!this.menu && this.actions.hasOwnProperty('refreshTime');
+    }
+
+    /**
+     * Gets whether the action set is cached and current.
      * @returns {boolean} Whether the client has a valid T3 touchmap.
      * @todo Check map expiration.
      */
