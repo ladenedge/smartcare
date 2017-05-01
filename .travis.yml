@@ -1,7 +1,15 @@
 language: node_js
 node_js:
-  - "6.10"
-  - "6"
+- '6.10'
+- '6'
 cache:
   directories:
-    - node_modules
+  - node_modules
+deploy:
+  provider: npm
+  email: jnmiller@cryptofreak.org
+  api_key:
+    secure: PaJ7FWkLwxXX9CcxmIQuzibGSwzJHJ/U+KkXDWWqiBxSkHyKj0J/Swoz4//oxTaiKsk2GoFGlAkFbsoPwkkva7SAhcdfe6iwD6ptginUnw28iobEZ+tix9JgKgkE9qSoQRNe/iJqEgO4XnV9tPM6W6lPwt1XkfvkQ4Ny4R7oFwkuOj9N3RzpdL7y8IkMai+ongJ3Ko/GJZZ9EpjoVRgyGBuKRDr44oOzfs+jgSBIVo4vxBDEm5BVD/BM+HUQCJIo9mjT/Cs1aSSYgyUDj1sJSNSqNOqYkApBpJqp7+vdcm6fWmPGUcC4zEwH2JOaZAWdso93wz+5dzs9s3gYOa94hCnZjIEKe4a+UYwti9fLGMq5tZKWyyJDaNlkQL7uH9eIs9Utab7KE8fFUsQBB1XeTU0Z+HZgqXT35I4hgf/5Ky26a0ZYDWb4WPFQOTmobFS6IrXS3vQ6UAnW0vy2TStFzcdfGAM5qIDatVEDhwkLvZriPEFwmdQTjBfUF9Vo/7fHSzgVbMAh9++nEcQm9YpVdI0xonNdz+JhAsfTyPS9s3vOhNJ2RFKkgLHSnYfGCwsQxt5rxAGu+NYyI5iXhAzeoqUTfhP6hfRjP/tA0Th33bE19mzL79qKVsLwXjC1k43DOONlg7AWztqfI2uQtc4XfrLYWSzy8IlE6tEdUl4t/t4=
+  on:
+    tags: true
+    repo: ladenedge/smartcare
