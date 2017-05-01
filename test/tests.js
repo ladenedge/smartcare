@@ -1,7 +1,7 @@
 var assert = require('assert');
 var sinon = require('sinon');
 var request = require('request');
-var SmartCare = require('../smartcare');
+var SmartCare = require('../index');
 
 var validConfig = {
     endpoints: {
