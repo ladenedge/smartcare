@@ -613,32 +613,10 @@ describe('search()', function () {
             });
         });
     });
-    it(`should refresh touchmap when hasActions is false`, function () {
-        delete smartcare.actions;
-        smartcare.search('query', validHandlers);
-        assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.search + '/touch-map');
-    });
     it(`should call onError when refreshTouchmap fails`, function (done) {
         delete smartcare.actions;
         var err = new Error('aaa');
         this.get.onFirstCall().callsArgWith(1, err);
-
-        validHandlers.onError = err => {
-            assert.equal(err.message, 'aaa');
-            done();
-        };
-        smartcare.search('query', validHandlers);
-    });
-    it(`should perform search after refreshTouchmap`, function (done) {
-        delete smartcare.actions;
-        var validBody = {
-            QueryMaps: null,
-            ServiceItems: [{ "Action": "Home_Dashboard", }],
-            Actions: [{ "Name": "Home_Dashboard", }]
-        }
-        var err = new Error('aaa');
-        this.get.onFirstCall().callsArgWith(1, null, { statusCode: 200 }, validBody);
-        this.get.onSecondCall().callsArgWith(1, err);
 
         validHandlers.onError = err => {
             assert.equal(err.message, 'aaa');
@@ -721,15 +699,6 @@ describe('search()', function () {
 
             validHandlers.onSuccess = rsp => {
                 assert(rsp.Results.length > 0);
-                done();
-            };
-            smartcare.search('query', validHandlers);
-        });
-        it(`should populate results with action objects`, function (done) {
-            this.get.callsArgWith(1, null, validResponse, validBody);
-
-            validHandlers.onSuccess = rsp => {
-                assert.equal(typeof rsp.Results[0].Action, 'object');
                 done();
             };
             smartcare.search('query', validHandlers);

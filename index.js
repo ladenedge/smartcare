@@ -10,7 +10,7 @@ var configSchema = [
     { key: 'customer', type: 'string', req: true },
     { key: 'app', type: 'string', req: true },
     { key: 'secret', type: 'string', req: true },
-    { key: 'name', type: 'string', req: false },
+    { key: 'agent', type: 'string', req: false },
     { key: 'platform', type: 'string', req: false },
     { key: 'verbose', type: 'boolean', req: false }
 ];
@@ -48,7 +48,7 @@ var endpointsSchema = [
 /**
  * Function called on successful authentication attempts.
  * @callback onSuccess  
- * @param {AuthToken|Action|undefined} response An object created from the body of the successful response.
+ * @param {AuthToken|Action|SmartCare} response An object created from the body of the successful response.
  */
 
 /**
@@ -73,7 +73,7 @@ class SmartCare {
      * @param {string} config.app Identifier of the calling application.
      * @param {string} config.secret The shared secret to use during authentication.
      * @param {string} [config.platform] The platform on which the application is running. (Eg. 'Web', 'DesktopWeb'.)
-     * @param {string} [config.name] A name or identifier for the calling application.
+     * @param {string} [config.agent] A name or identifier for the calling application.
      * @param {boolean} [config.verbose] Whether to output detailed logging to stderr.
      */
     constructor(config) {
@@ -177,19 +177,13 @@ class SmartCare {
             if (this.config.verbose)
                 console.error(body);
 
-            this.menu = body.ServiceItems
-                .filter(si => body.Actions.find(a => a.Name == si.Action))
-                .map(si => {
-                    si.Action = body.Actions.find(a => a.Name == si.Action);
-                    return si;
-                });
-
+            this.menu = body.ServiceItems;
             this.actions = { refreshTime: new Date() };
             body.Actions.forEach(a => {
                 this.actions[a.Name] = a;
             });
 
-            responseHandlers.onSuccess();
+            responseHandlers.onSuccess(this);
         });
     }
 
@@ -205,37 +199,21 @@ class SmartCare {
         validator.validateString(this.config.endpoints.search, 'search endpoint');
         validator.validateResponseHandlers(responseHandlers);
 
-        var performSearch = () => {
-            var opts = t3util.requestOptions(this.config);
-            opts.url = this.config.endpoints.search + '/simple';
-            opts.qs = { text: query };
+        var opts = t3util.requestOptions(this.config);
+        opts.url = this.config.endpoints.search + '/simple';
+        opts.qs = { text: query };
 
-            request.debug = !!this.config.verbose;
-            request.get(opts, (error, rsp, body) => {
-                if (error)
-                    return responseHandlers.onError(error);
-                if (rsp.statusCode !== 200)
-                    return responseHandlers.onError(new Error('Search failed'));
-                if (this.config.verbose)
-                    console.error(body);
+        request.debug = !!this.config.verbose;
+        request.get(opts, (error, rsp, body) => {
+            if (error)
+                return responseHandlers.onError(error);
+            if (rsp.statusCode !== 200)
+                return responseHandlers.onError(new Error('Search failed'));
+            if (this.config.verbose)
+                console.error(body);
 
-                body.Results.forEach(a => {
-                    if (typeof a.Action !== 'object')
-                        a.Action = this.actions[a.Action];
-                });
-
-                responseHandlers.onSuccess(body);
-            });
-        };
-
-        if (this.hasActions)
-            performSearch();
-        else {
-            this.refreshTouchmap({
-                onError: responseHandlers.onError,
-                onSuccess: () => { performSearch(); }
-            });
-        }
+            responseHandlers.onSuccess(body);
+        });
     }
 
     /**
