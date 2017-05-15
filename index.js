@@ -248,7 +248,7 @@ class SmartCare {
     /**
      * Retrieves an authenticated user's statements.
      * @param {number} count The number of statements to retrieve, starting with the latest.  Must be at least 1.
-     * @param {boolean} pdfs Whether to get the statements in PDF form or JSON.
+     * @param {boolean} pdf Whether to get the statements in PDF form or JSON.
      * @param {Object} responseHandlers An object that contains callbacks for statement results.
      * @param {onSuccess} responseHandlers.onSuccess Function to call if the lookup is successful.
      * @param {onError} responseHandlers.onError Function to call in case of error.
@@ -271,7 +271,7 @@ class SmartCare {
             if (error)
                 return responseHandlers.onError(error);
             if (rsp.statusCode !== 200)
-                return responseHandlers.onError(new Error('Account lookup failed'));
+                return responseHandlers.onError(new Error('Statement lookup failed'));
             if (this.config.verbose)
                 console.error(body);
 

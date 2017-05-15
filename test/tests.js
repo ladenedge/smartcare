@@ -560,21 +560,9 @@ describe('search()', function () {
         onSuccess: function (rsp) { },
         onError: function (err) { }
     };
-    var validActions = {
-        refreshTime: new Date(),
-        "Home_Dashboard": {
-            "Name": "Home_Dashboard",
-        }
-    };
-    var validBody = {
-        Results: [{
-            Action: "Home_Dashboard"
-        }]
-    };
 
     beforeEach(function () {
         this.get = sinon.stub(request, 'get');
-        smartcare.actions = validActions;
     });
     afterEach(function () {
         request.get.restore();
@@ -612,21 +600,6 @@ describe('search()', function () {
                 assert.throws(() => smartcare.search('query', invalidHandlers), Error);
             });
         });
-    });
-    it(`should call onError when refreshTouchmap fails`, function (done) {
-        delete smartcare.actions;
-        var err = new Error('aaa');
-        this.get.onFirstCall().callsArgWith(1, err);
-
-        validHandlers.onError = err => {
-            assert.equal(err.message, 'aaa');
-            done();
-        };
-        smartcare.search('query', validHandlers);
-    });
-    it(`should skip refresh when hasActions is false`, function () {
-        smartcare.search('query', validHandlers);
-        assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.search + '/simple');
     });
     describe('request', function () {
         it(`should get configured url`, function () {
@@ -679,7 +652,7 @@ describe('search()', function () {
             smartcare.search('query', validHandlers);
         });
         it(`should call onSuccess on 200 OK`, function (done) {
-            this.get.callsArgWith(1, null, validResponse, validBody);
+            this.get.callsArgWith(1, null, validResponse, {});
 
             validHandlers.onSuccess = rsp => { done(); };
             smartcare.search('query', validHandlers);
@@ -688,20 +661,302 @@ describe('search()', function () {
             var config = validConfig.clone();
             config.verbose = true;
             var scclient = new SmartCare(config);
-            scclient.actions = validActions;
-            this.get.callsArgWith(1, null, validResponse, validBody);
+            this.get.callsArgWith(1, null, validResponse, {});
 
             validHandlers.onSuccess = rsp => { done(); };
             scclient.search('query', validHandlers);
         });
         it(`should call onSuccess with results`, function (done) {
-            this.get.callsArgWith(1, null, validResponse, validBody);
+            this.get.callsArgWith(1, null, validResponse, { expected: true });
 
             validHandlers.onSuccess = rsp => {
-                assert(rsp.Results.length > 0);
+                assert(rsp.expected);
                 done();
             };
             smartcare.search('query', validHandlers);
+        });
+    });
+});
+
+describe('getAccount()', function () {
+    var smartcare = new SmartCare(validConfig);
+    var validHandlers = {
+        onSuccess: function (rsp) { },
+        onError: function (err) { }
+    };
+
+    beforeEach(function () {
+        this.get = sinon.stub(request, 'get');
+        smartcare.auth = { T3Token: '1234' };
+    });
+    afterEach(function () {
+        request.get.restore();
+    });
+
+    it(`should throw without account endpoint`, function () {
+        var config = validConfig.clone();
+        delete config.endpoints.account;
+        var scclient = new SmartCare(config);
+        assert.throws(() => scclient.getAccount(validHandlers), Error);
+    });
+    it(`should throw when handlers are undefined`, function () {
+        assert.throws(() => smartcare.getAccount(), Error);
+    });
+    it(`should throw when handlers are null`, function () {
+        assert.throws(() => smartcare.getAccount(null), Error);
+    });
+    Object.keys(validHandlers).forEach(hand => {
+        it(`should throw when ${hand} handler is missing`, function () {
+            let invalidHandlers = Object.assign({}, validHandlers);
+            delete invalidHandlers[hand];
+            assert.throws(() => smartcare.getAccount(invalidHandlers), Error);
+        });
+    });
+    Object.keys(validHandlers).forEach(hand => {
+        badHandlerValues.forEach(val => {
+            it(`should throw when ${hand} handler is '${val}'`, function () {
+                let invalidHandlers = Object.assign({}, validHandlers);
+                invalidHandlers[hand] = val;
+                assert.throws(() => smartcare.getAccount(invalidHandlers), Error);
+            });
+        });
+    });
+    it(`should throw when not authenticated`, function () {
+        smartcare.auth = null;
+        assert.throws(() => smartcare.getAccount(validHandlers), Error);
+    });
+    describe('request', function () {
+        it(`should get configured url`, function () {
+            smartcare.getAccount(validHandlers);
+            assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.account + '/account/get-by-number');
+        });
+        it(`should enable json`, function () {
+            smartcare.getAccount(validHandlers);
+            assert(this.get.firstCall.args[0].json);
+        });
+        [
+            { name: 'X-SpeechCycle-SmartCare-CustomerID', val: validConfig.customer },
+            { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
+        ].forEach(opt => {
+            it(`should get HTTP header ${opt.name}`, function () {
+                smartcare.getAccount(validHandlers);
+                assert.equal(this.get.firstCall.args[0]['headers'][opt.name], opt.val);
+            });
+        });
+        it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function () {
+            smartcare.getAccount(validHandlers);
+            assert(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
+        });
+    });
+    describe('response', function (done) {
+        var validResponse = { statusCode: 200 }
+
+        it(`should call onError on error`, function (done) {
+            var err = new Error('aaa');
+            this.get.callsArgWith(1, err);
+
+            validHandlers.onError = err => {
+                assert.equal(err.message, 'aaa');
+                done();
+            };
+            smartcare.getAccount(validHandlers);
+        });
+        it(`should call onError on non-200 status code`, function (done) {
+            var rsp = { statusCode: 400 };
+            this.get.callsArgWith(1, null, rsp);
+
+            validHandlers.onError = err => {
+                assert.equal(err.message, 'Account lookup failed');
+                done();
+            };
+            smartcare.getAccount(validHandlers);
+        });
+        it(`should call onSuccess on 200 OK`, function (done) {
+            this.get.callsArgWith(1, null, validResponse, {});
+
+            validHandlers.onSuccess = rsp => { done(); };
+            smartcare.getAccount(validHandlers);
+        });
+        it(`should call onSuccess in verbose mode`, function (done) {
+            var config = validConfig.clone();
+            config.verbose = true;
+            var scclient = new SmartCare(config);
+            scclient.auth = { T3Token: '1234' };
+            this.get.callsArgWith(1, null, validResponse, {});
+
+            validHandlers.onSuccess = rsp => { done(); };
+            scclient.getAccount(validHandlers);
+        });
+        it(`should call onSuccess with results`, function (done) {
+            this.get.callsArgWith(1, null, validResponse, { expected: true });
+
+            validHandlers.onSuccess = rsp => {
+                assert(rsp.expected);
+                done();
+            };
+            smartcare.getAccount(validHandlers);
+        });
+    });
+});
+
+describe('getStatements()', function () {
+    var smartcare = new SmartCare(validConfig);
+    var validHandlers = {
+        onSuccess: function (rsp) { },
+        onError: function (err) { }
+    };
+    var validAuth = {
+        T3Token: '1234',
+        Value: 'value'
+    };
+
+    beforeEach(function () {
+        this.get = sinon.stub(request, 'get');
+        smartcare.auth = validAuth;
+    });
+    afterEach(function () {
+        request.get.restore();
+    });
+
+    it(`should throw when count is undefined`, function () {
+        assert.throws(() => smartcare.getStatements(), Error);
+    });
+    ['a string', -1, 0].forEach(count => {
+        it(`should throw when count is ${count}`, function () {
+            assert.throws(() => smartcare.getStatements(count, false, validHandlers), Error);
+        });
+    });
+    it(`should throw when pdf is undefined`, function () {
+        assert.throws(() => smartcare.getStatements(1), Error);
+    });
+    it(`should throw when pdf is wrong type`, function () {
+        assert.throws(() => smartcare.getStatements(1, 'string', validHandlers), Error);
+    });
+    it(`should throw without account endpoint`, function () {
+        var config = validConfig.clone();
+        delete config.endpoints.account;
+        var scclient = new SmartCare(config);
+        assert.throws(() => scclient.getStatements(1, false, validHandlers), Error);
+    });
+    it(`should throw when handlers are undefined`, function () {
+        assert.throws(() => smartcare.getStatements(1, false), Error);
+    });
+    it(`should throw when handlers are null`, function () {
+        assert.throws(() => smartcare.getStatements(1, false, null), Error);
+    });
+    Object.keys(validHandlers).forEach(hand => {
+        it(`should throw when ${hand} handler is missing`, function () {
+            let invalidHandlers = Object.assign({}, validHandlers);
+            delete invalidHandlers[hand];
+            assert.throws(() => smartcare.getStatements(1, false, invalidHandlers), Error);
+        });
+    });
+    Object.keys(validHandlers).forEach(hand => {
+        badHandlerValues.forEach(val => {
+            it(`should throw when ${hand} handler is '${val}'`, function () {
+                let invalidHandlers = Object.assign({}, validHandlers);
+                invalidHandlers[hand] = val;
+                assert.throws(() => smartcare.getStatements(1, false, invalidHandlers), Error);
+            });
+        });
+    });
+    it(`should throw when not authenticated`, function () {
+        smartcare.auth = null;
+        assert.throws(() => smartcare.getStatements(1, false, validHandlers), Error);
+    });
+    describe('request', function () {
+        it(`should get configured url`, function () {
+            smartcare.getStatements(1, false, validHandlers);
+            assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.account + '/bill/1');
+        });
+        it(`should use pdf endpoint`, function () {
+            smartcare.getStatements(1, true, validHandlers);
+            assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.account + '/pdf-statement/1');
+        });
+        [2, 3].forEach(count => {
+            it(`should change endpoint when count is ${count}`, function () {
+                smartcare.getStatements(count, false, validHandlers);
+                assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.account + '/bill/' + count);
+            });
+        });
+        it(`should enable json`, function () {
+            smartcare.getStatements(1, false, validHandlers);
+            assert(this.get.firstCall.args[0].json);
+        });
+        [
+            { name: 'X-SpeechCycle-SmartCare-CustomerID', val: validConfig.customer },
+            { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
+            { name: 'X-SpeechCycle-SmartCare-UserID', val: validAuth.Value },
+            { name: 'X-SpeechCycle-SmartCare-UserName', val: validAuth.Value },
+            { name: 'X-SpeechCycle-SmartCare-T3Token', val: validAuth.T3Token }
+        ].forEach(opt => {
+            it(`should get HTTP header ${opt.name}`, function () {
+                smartcare.getStatements(1, false, validHandlers);
+                assert.equal(this.get.firstCall.args[0]['headers'][opt.name], opt.val);
+            });
+        });
+        it(`should get HTTP header X-SpeechCycle-SmartCare-AdditionalValues when values are present`, function () {
+            Object.assign(smartcare.auth, { AdditionalValues: [1] });
+            smartcare.getStatements(1, false, validHandlers);
+            assert.equal(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-AdditionalValues'], '1');
+        });
+        it(`should get HTTP header X-SpeechCycle-SmartCare-AdditionalValues when multiple values are present`, function () {
+            Object.assign(smartcare.auth, { AdditionalValues: [1,2,3] });
+            smartcare.getStatements(1, false, validHandlers);
+            assert.equal(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-AdditionalValues'], '1,2,3');
+        });
+        it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function () {
+            smartcare.getStatements(1, false, validHandlers);
+            assert(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
+        });
+    });
+    describe('response', function (done) {
+        var validResponse = { statusCode: 200 }
+
+        it(`should call onError on error`, function (done) {
+            var err = new Error('aaa');
+            this.get.callsArgWith(1, err);
+
+            validHandlers.onError = err => {
+                assert.equal(err.message, 'aaa');
+                done();
+            };
+            smartcare.getStatements(1, false, validHandlers);
+        });
+        it(`should call onError on non-200 status code`, function (done) {
+            var rsp = { statusCode: 400 };
+            this.get.callsArgWith(1, null, rsp);
+
+            validHandlers.onError = err => {
+                assert.equal(err.message, 'Statement lookup failed');
+                done();
+            };
+            smartcare.getStatements(1, false, validHandlers);
+        });
+        it(`should call onSuccess on 200 OK`, function (done) {
+            this.get.callsArgWith(1, null, validResponse, {});
+
+            validHandlers.onSuccess = rsp => { done(); };
+            smartcare.getStatements(1, false, validHandlers);
+        });
+        it(`should call onSuccess in verbose mode`, function (done) {
+            var config = validConfig.clone();
+            config.verbose = true;
+            var scclient = new SmartCare(config);
+            scclient.auth = validAuth;
+            this.get.callsArgWith(1, null, validResponse, {});
+
+            validHandlers.onSuccess = rsp => { done(); };
+            scclient.getStatements(1, false, validHandlers);
+        });
+        it(`should call onSuccess with results`, function (done) {
+            this.get.callsArgWith(1, null, validResponse, { expected: true });
+
+            validHandlers.onSuccess = rsp => {
+                assert(rsp.expected);
+                done();
+            };
+            smartcare.getStatements(1, false, validHandlers);
         });
     });
 });
