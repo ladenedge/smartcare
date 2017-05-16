@@ -6,9 +6,10 @@ var SmartCare = require('../index');
 var validConfig = {
     endpoints: {
         login: 'https://t3.sc.com/path',
-        signin: 'https://t3.sc.com/path',
+        signin: 'https://si.sc.com/path',
         search: 'https://s.sc.com/path',
-        account: 'https://a.sc.com/path'
+        account: 'https://a.sc.com/path',
+        dashboard: 'https://db.sc.com/path'
     },
     customer: 'Tester',
     app: 'Mocha',
@@ -263,6 +264,12 @@ describe('login()', function() {
                 });
             });
         });
+        it(`should get cookie jar`, function (done) {
+            smartcare.login('un', 'pw', (err, rsp) => {
+                assert.equal(typeof this.post.thirdCall.args[0].jar, 'object');
+                done();
+            });
+        });
         [
             { name: 's_customerId', val: validConfig.customer },
             { name: 's_applicationId', val: validConfig.app },
@@ -329,7 +336,7 @@ describe('login()', function() {
         });
         it(`should set dashboard endpoint from signin endpoint on success`, function (done) {
             smartcare.login('un', 'pw', (err, rsp) => {
-                assert(smartcare.config.endpoints.dashboard.startsWith('https://t3.sc.com'));
+                assert(smartcare.config.endpoints.dashboard.startsWith('https://si.sc.com'));
                 done();
             });
         });
@@ -690,10 +697,14 @@ describe('search()', function () {
 
 describe('getAccount()', function () {
     var smartcare = new SmartCare(validConfig);
+    var validAuth = {
+        T3Token: '1234',
+        Value: 'value'
+    };
 
     beforeEach(function () {
         this.get = sinon.stub(request, 'get');
-        smartcare.auth = { T3Token: '1234' };
+        smartcare.auth = validAuth;
     });
     afterEach(function () {
         request.get.restore();
@@ -724,6 +735,9 @@ describe('getAccount()', function () {
         [
             { name: 'X-SpeechCycle-SmartCare-CustomerID', val: validConfig.customer },
             { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
+            { name: 'X-SpeechCycle-SmartCare-UserID', val: validAuth.Value },
+            { name: 'X-SpeechCycle-SmartCare-UserName', val: validAuth.Value },
+            { name: 'X-SpeechCycle-SmartCare-T3Token', val: validAuth.T3Token }
         ].forEach(opt => {
             it(`should get HTTP header ${opt.name}`, function () {
                 smartcare.getAccount();
@@ -924,6 +938,115 @@ describe('getStatements()', function () {
                 assert(rsp.expected);
                 done();
             });
+        });
+    });
+});
+
+describe('dashboard()', function () {
+    var smartcare = new SmartCare(validConfig);
+    var endpoints = [
+        'GetBillingData',
+        'GetUsageData',
+        'GetOutageData',
+        'GetAppointmentData'
+    ];
+
+    beforeEach(function () {
+        this.post = sinon.stub(request, 'post');
+        smartcare.auth = { T3Token: '1234' };
+    });
+    afterEach(function () {
+        request.post.restore();
+    });
+
+    it(`should throw without dashboard endpoint`, function () {
+        var config = validConfig.clone();
+        delete config.endpoints.dashboard;
+        var scclient = new SmartCare(config);
+        assert.throws(() => scclient.dashboard(), Error);
+    });
+    it(`should throw when callback is wrong type`, function () {
+        assert.throws(() => smartcare.dashboard('string'), Error);
+    });
+    it(`should throw when not authenticated`, function () {
+        smartcare.auth = null;
+        assert.throws(() => smartcare.dashboard(), Error);
+    });
+    describe('request', function () {
+        endpoints.forEach(ep => {
+            it(`for ${ep} should happen`, function () {
+                smartcare.dashboard();
+                assert(this.post.getCalls().find(c => c.args[0] === `/${ep}`));
+            });
+            it(`for ${ep} should get configured url`, function () {
+                smartcare.dashboard();
+                var call = this.post.getCalls().find(c => c.args[0] === `/${ep}`);
+                assert.equal(call.args[1].baseUrl, validConfig.endpoints.dashboard);
+            });
+            it(`for ${ep} should enable json`, function () {
+                smartcare.dashboard();
+                var call = this.post.getCalls().find(c => c.args[0] === `/${ep}`);
+                assert(call.args[1].json);
+            });
+            it(`for ${ep} should have cookie jar`, function () {
+                smartcare.dashboard();
+                var call = this.post.getCalls().find(c => c.args[0] === `/${ep}`);
+                assert.equal(typeof call.args[1].jar, 'object');
+            });
+        });
+    });
+    describe('response', function (done) {
+        var validResponse = { statusCode: 200 }
+
+        endpoints.forEach(ep => {
+            it(`from ${ep} should include error argument on error`, function (done) {
+                var err = new Error('aaa');
+                this.post.callsArgWith(2, null, validResponse);
+                this.post.withArgs(`/${ep}`, sinon.match.any, sinon.match.any).callsArgWith(2, err);
+
+                smartcare.dashboard((err, rsp) => {
+                    assert.equal(err.message, 'aaa');
+                    done();
+                });
+            });
+            it(`from ${ep} should include error argument on non-200 status code`, function (done) {
+                var rsp = { statusCode: 400 };
+                this.post.callsArgWith(2, null, validResponse);
+                this.post.withArgs(`/${ep}`, sinon.match.any, sinon.match.any).callsArgWith(2, null, rsp);
+
+                smartcare.dashboard((err, rsp) => {
+                    assert.equal(err.message, 'Dashboard refresh failed');
+                    done();
+                });
+            });
+            it(`from ${ep} should succeed on 200 OK`, function (done) {
+                this.post.callsArgWith(2, null, validResponse, {});
+
+                smartcare.dashboard((err, rsp) => {
+                    assert(!err);
+                    done();
+                });
+            }).timeout(10000);
+            it(`from ${ep} should succeed in verbose mode`, function (done) {
+                var config = validConfig.clone();
+                config.verbose = true;
+                var scclient = new SmartCare(config);
+                scclient.auth = { T3Token: '1234' };
+                this.post.callsArgWith(2, null, validResponse, {});
+
+                scclient.dashboard((err, rsp) => {
+                    assert(!err);
+                    done();
+                });
+            });
+            it(`from ${ep} should succeed with results`, function (done) {
+                this.post.callsArgWith(2, null, validResponse, { expected: ep });
+
+                smartcare.dashboard((err, rsp) => {
+                    assert.equal(rsp[ep.replace('Get', '')].expected, ep);
+                    done();
+                });
+            }).timeout(10000);
         });
     });
 });

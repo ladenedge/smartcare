@@ -294,6 +294,7 @@ class SmartCare {
      */
     dashboard(callback) {
         callback = validator.validateCallback(callback);
+        validator.validateString(this.config.endpoints.dashboard, 'dashboard endpoint');
         if (!this.isAuthenticated)
             throw new Error('An active login is required');
 
@@ -311,7 +312,7 @@ class SmartCare {
                 if (error)
                     return finished(error);
                 if (rsp.statusCode !== 200)
-                    return finished(new Error('Statement lookup failed'));
+                    return finished(new Error('Dashboard refresh failed'));
                 if (this.config.verbose)
                     console.error(body);
                 finished(null, body);
