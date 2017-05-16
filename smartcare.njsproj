@@ -32,10 +32,6 @@
     <Compile Include="lib\insensitive-get.js" />
     <Compile Include="lib\t3util.js" />
     <Compile Include="lib\validate.js" />
-    <Compile Include="misc\realtests.js">
-      <TestFramework>Mocha</TestFramework>
-      <Publish>False</Publish>
-    </Compile>
     <Compile Include="test\tests.js">
       <Publish>False</Publish>
       <TestFramework>Mocha</TestFramework>
