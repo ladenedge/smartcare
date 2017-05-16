@@ -27,6 +27,13 @@ var endpointsSchema = [
 ];
 
 /**
+ * This callback is displayed as part of the Requester class.
+ * @callback SmartCare~callback
+ * @param {Error} err An Error object containing information about a failure, or null if the call succeeded.
+ * @param {AuthToken|Action|SmartCare} response An object created from the body of the successful response.
+ */
+
+/**
  * Result of a successful login command.
  * @typedef {Object} AuthToken
  * @property {string} Value The authenticated user's username.
@@ -50,19 +57,7 @@ var endpointsSchema = [
  */
 
 /**
- * Function called on successful authentication attempts.
- * @callback onSuccess  
- * @param {AuthToken|Action|SmartCare} response An object created from the body of the successful response.
- */
-
-/**
- * Function called on failed authentication attempts.
- * @callback onError
- * @param {Object} error An Error object containing information about the failure.
- */
-
-/**
- * Authentication module for the T3 speech services.
+ * Module for the T3 speech services.
  */
 class SmartCare {
     /**
@@ -70,6 +65,7 @@ class SmartCare {
      * @param {Object} config Configuration for the module.
      * @param {Object} config.endpoints Set of endpoints for individual SmartCare services.  Only those endpoints that will be used are required.
      * @param {string} [config.endpoints.login] Full endpoint for the authentication service.
+     * @param {string} [config.endpoints.signin] Full endpoint for the WinForms signin service.
      * @param {string} [config.endpoints.search] Full endpoint for the T3 search service.
      * @param {string} [config.endpoints.account] Full endpoint for the account and billing service.
      * @param {string} [config.endpoints.proxy] Optional proxy endpoint.
@@ -90,16 +86,14 @@ class SmartCare {
      * Attempts the authentication procedure.
      * @param {string} username A string containing the username to authenticate.
      * @param {string} password A string containing the user's password.
-     * @param {Object} responseHandlers An object that contains callbacks for authentication results.
-     * @param {onSuccess} responseHandlers.onSuccess Function to call if authentication is successful.
-     * @param {onError} responseHandlers.onError Function to call in case of error.
+     * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
      */
-    login(username, password, responseHandlers) {
+    login(username, password, callback) {
         username = validator.validateString(username, 'username');
         password = validator.validateString(password, 'password');
+        callback = validator.validateCallback(callback);
         validator.validateString(this.config.endpoints.login, 'login endpoint');
         validator.validateString(this.config.endpoints.signin, 'signin endpoint');
-        validator.validateResponseHandlers(responseHandlers);
 
         var opts = t3util.requestOptions(this.config);
         opts.url = this.config.endpoints.login;
@@ -112,19 +106,19 @@ class SmartCare {
         request.debug = !!this.config.verbose;
         request.post(opts, (error, rsp, body) => {
             if (error)
-                responseHandlers.onError(error);
+                callback(error);
             var authHeader = insensitiveGet(rsp.headers, 'WWW-Authenticate');
             if (!authHeader || !authHeader.match(/^T3Auth /i))
-                responseHandlers.onError(new Error('Challenge not found'));
+                callback(new Error('Challenge not found'));
 
             var token = t3util.createToken(this.config, opts.headers['X-SpeechCycle-SmartCare-SessionID']);
             opts.headers['Authorization'] = authHeader + `, token=${token}`;
 
             request.post(opts, (error, rsp, body) => {
                 if (error)
-                    return responseHandlers.onError(error);
+                    return callback(error);
                 if (rsp.statusCode !== 200)
-                    return responseHandlers.onError(new Error('Authentication failed'));
+                    return callback(new Error('Authentication failed'));
                 if (this.config.verbose)
                     console.error(body);
 
@@ -135,17 +129,17 @@ class SmartCare {
 
                 request.post(opts, (error, rsp, body) => {
                     if (error)
-                        return responseHandlers.onError(error);
+                        return callback(error);
                     if (rsp.statusCode !== 302)
-                        return responseHandlers.onError(new Error('Signin protocol error'));
+                        return callback(new Error('Signin protocol error'));
                     var location = insensitiveGet(rsp.headers, 'Location');
                     if (location.includes('forbidden'))
-                        return responseHandlers.onError(new Error('Signin failed'));
+                        return callback(new Error('Signin failed'));
 
                     var signinUrl = url.parse(this.config.endpoints.signin);
                     this.config.endpoints.dashboard = `${signinUrl.protocol}//${signinUrl.host}${location}`;
 
-                    responseHandlers.onSuccess();
+                    callback();
                 });
             });
         });
@@ -180,13 +174,11 @@ class SmartCare {
 
     /**
      * Updates the menu items and actions database (ie. the "touchmap").
-     * @param {Object} responseHandlers An object that contains callbacks for search results.
-     * @param {onSuccess} responseHandlers.onSuccess Function to call if the refresh is successful.
-     * @param {onError} responseHandlers.onError Function to call in case of error.
+     * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
      */
-    refreshTouchmap(responseHandlers) {
+    refreshTouchmap(callback) {
+        callback = validator.validateCallback(callback);
         validator.validateString(this.config.endpoints.search, 'search endpoint');
-        validator.validateResponseHandlers(responseHandlers);
 
         var opts = t3util.requestOptions(this.config);
         opts.url = this.config.endpoints.search + '/touch-map';
@@ -194,9 +186,9 @@ class SmartCare {
         request.debug = !!this.config.verbose;
         request.get(opts, (error, rsp, body) => {
             if (error)
-                return responseHandlers.onError(error);
+                return callback(error);
             if (rsp.statusCode !== 200)
-                return responseHandlers.onError(new Error('Touchmap refresh failed'));
+                return callback(new Error('Touchmap refresh failed'));
             if (this.config.verbose)
                 console.error(body);
 
@@ -206,21 +198,19 @@ class SmartCare {
                 this.actions[a.Name] = a;
             });
 
-            responseHandlers.onSuccess(this);
+            callback(null, this);
         });
     }
 
     /**
      * Searches for actions related to a query by a user.
      * @param {string} query User's search query.
-     * @param {Object} responseHandlers An object that contains callbacks for search results.
-     * @param {onSuccess} responseHandlers.onSuccess Function to call if the search is successful.
-     * @param {onError} responseHandlers.onError Function to call in case of error.
+     * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
      */
-    search(query, responseHandlers) {
+    search(query, callback) {
         query = validator.validateString(query, 'query');
+        callback = validator.validateCallback(callback);
         validator.validateString(this.config.endpoints.search, 'search endpoint');
-        validator.validateResponseHandlers(responseHandlers);
 
         var opts = t3util.requestOptions(this.config);
         opts.url = this.config.endpoints.search + '/simple';
@@ -229,25 +219,23 @@ class SmartCare {
         request.debug = !!this.config.verbose;
         request.get(opts, (error, rsp, body) => {
             if (error)
-                return responseHandlers.onError(error);
+                return callback(error);
             if (rsp.statusCode !== 200)
-                return responseHandlers.onError(new Error('Search failed'));
+                return callback(new Error('Search failed'));
             if (this.config.verbose)
                 console.error(body);
 
-            responseHandlers.onSuccess(body);
+            callback(null, body);
         });
     }
 
     /**
      * Retrieves an authenticated user's account information.
-     * @param {Object} responseHandlers An object that contains callbacks for account results.
-     * @param {onSuccess} responseHandlers.onSuccess Function to call if the lookup is successful.
-     * @param {onError} responseHandlers.onError Function to call in case of error.
+     * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
      */
-    getAccount(responseHandlers) {
+    getAccount(callback) {
         validator.validateString(this.config.endpoints.account, 'account endpoint');
-        validator.validateResponseHandlers(responseHandlers);
+        callback = validator.validateCallback(callback);
         if (!this.isAuthenticated)
             throw new Error('An active login is required');
 
@@ -258,13 +246,13 @@ class SmartCare {
         request.debug = !!this.config.verbose;
         request.get(opts, (error, rsp, body) => {
             if (error)
-                return responseHandlers.onError(error);
+                return callback(error);
             if (rsp.statusCode !== 200)
-                return responseHandlers.onError(new Error('Account lookup failed'));
+                return callback(new Error('Account lookup failed'));
             if (this.config.verbose)
                 console.error(body);
 
-            responseHandlers.onSuccess(body);
+            callback(null, body);
         });
     }
 
@@ -272,15 +260,13 @@ class SmartCare {
      * Retrieves an authenticated user's statements.
      * @param {number} count The number of statements to retrieve, starting with the latest.  Must be at least 1.
      * @param {boolean} pdf Whether to get the statements in PDF form or JSON.
-     * @param {Object} responseHandlers An object that contains callbacks for statement results.
-     * @param {onSuccess} responseHandlers.onSuccess Function to call if the lookup is successful.
-     * @param {onError} responseHandlers.onError Function to call in case of error.
+     * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
      */
-    getStatements(count, pdf, responseHandlers) {
+    getStatements(count, pdf, callback) {
         validator.validateNumber(count, 1, 'count');
         validator.validateBoolean(pdf, 'pdf');
         validator.validateString(this.config.endpoints.account, 'account endpoint');
-        validator.validateResponseHandlers(responseHandlers);
+        callback = validator.validateCallback(callback);
         if (!this.isAuthenticated)
             throw new Error('An active login is required');
 
@@ -292,17 +278,17 @@ class SmartCare {
         request.debug = !!this.config.verbose;
         request.get(opts, (error, rsp, body) => {
             if (error)
-                return responseHandlers.onError(error);
+                return callback(error);
             if (rsp.statusCode !== 200)
-                return responseHandlers.onError(new Error('Statement lookup failed'));
+                return callback(new Error('Statement lookup failed'));
             if (this.config.verbose)
                 console.error(body);
 
-            responseHandlers.onSuccess(body);
+            callback(null, body);
         });
     }
 
-    dashboard(onComplete) {
+    dashboard(callback) {
         if (!this.isAuthenticated)
             throw new Error('An active login is required');
 
@@ -315,24 +301,24 @@ class SmartCare {
             'GetOutageData',
             'GetAppointmentData'
         ];
-        async.map(endpoints, (endpoint, callback) => {
+        async.map(endpoints, (endpoint, finished) => {
             request.post(`/${endpoint}`, opts, (error, rsp, body) => {
                 if (error)
-                    return callback(error);
+                    return finished(error);
                 if (rsp.statusCode !== 200)
-                    return callback(new Error('Statement lookup failed'));
+                    return finished(new Error('Statement lookup failed'));
                 if (this.config.verbose)
                     console.error(body);
-                callback(null, body);
+                finished(null, body);
             });
         }, (err, results) => {
             if (err)
-                return onComplete(err);
+                return callback(err);
             var results = results.reduce((prev, cur, i) => {
                 prev[endpoints[i].replace('Get', '')] = results[i];
                 return prev;
             }, {});
-            onComplete(null, results);
+            callback(null, results);
         });
     }
 };

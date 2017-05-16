@@ -6,6 +6,7 @@ var SmartCare = require('../index');
 var validConfig = {
     endpoints: {
          login: 'https://t3.sc.com',
+         signin: 'https://t3.sc.com',
          search: 'https://s.sc.com',
          account: 'https://a.sc.com'
     },
@@ -20,7 +21,6 @@ var validConfig = {
 };
 
 var badStringValues = [null, "", " \t ", 1];
-var badHandlerValues = [null, ""];
 var requiredParams = ['endpoints', 'customer', 'app', 'secret'];
 
 
@@ -71,10 +71,6 @@ describe('constructor', function() {
 
 describe('login()', function() {
     var smartcare = new SmartCare(validConfig);
-    var validHandlers = {
-        onSuccess: function(rsp) { },
-        onError: function(err) { }
-    };
     var validBody = {
         ID: 'un',
         Password: 'pw',
@@ -91,53 +87,36 @@ describe('login()', function() {
 
     badStringValues.forEach(arg => {
         it(`should throw when username is '${arg}'`, function() {
-            assert.throws(() => smartcare.login(arg, "pw", validHandlers), Error);
+            assert.throws(() => smartcare.login(arg, 'pw'), Error);
         });
     });
     badStringValues.forEach(arg => {
         it(`should throw when password is '${arg}'`, function() {
-            assert.throws(() => smartcare.login("un", arg, validHandlers), Error);
+            assert.throws(() => smartcare.login('un', arg), Error);
         });
     });
-    it(`should throw without login endpoint`, function () {
-        var config = validConfig.clone();
-        delete config.endpoints.login;
-        var scclient = new SmartCare(config);
-        assert.throws(() => scclient.login("un", "pw", validHandlers), Error);
-    });
-    it(`should throw when handlers are undefined`, function() {
-        assert.throws(() => smartcare.login("un", "pw"), Error);
-    });
-    it(`should throw when handlers are null`, function() {
-        assert.throws(() => smartcare.login("un", "pw", null), Error);
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        it(`should throw when ${hand} handler is missing`, function() {
-            let invalidHandlers = Object.assign({}, validHandlers);
-            delete invalidHandlers[hand];
-            assert.throws(() => smartcare.login("un", "pw", invalidHandlers), Error);
+    ['login', 'signin'].forEach(ep => {
+        it(`should throw without ${ep} endpoint`, function () {
+            var config = validConfig.clone();
+            delete config.endpoints[ep];
+            var scclient = new SmartCare(config);
+            assert.throws(() => scclient.login('un', 'pw'), Error);
         });
     });
-    Object.keys(validHandlers).forEach(hand => {
-        badHandlerValues.forEach(val => {
-            it(`should throw when ${hand} handler is '${val}'`, function() {
-                let invalidHandlers = Object.assign({}, validHandlers);
-                invalidHandlers[hand] = val;
-                assert.throws(() => smartcare.login("un", "pw", invalidHandlers), Error);
-            });
-        });
+    it(`should throw when callback is wrong type`, function() {
+        assert.throws(() => smartcare.login('un', 'pw', 'string'), Error);
     });
     describe('initial request', function() {
         [
             { key: 'url', val: validConfig.endpoints.login },
         ].forEach(opt => {
             it(`should get configured ${opt.key}`, function() {
-                smartcare.login("un", "pw", validHandlers);
+                smartcare.login('un', 'pw');
                 assert.equal(this.post.firstCall.args[0][opt.key], opt.val);
             });
         });
         it(`should enable json`, function() {
-            smartcare.login("un", "pw", validHandlers);
+            smartcare.login('un', 'pw');
             assert(this.post.firstCall.args[0].json);
         });
         [
@@ -145,54 +124,51 @@ describe('login()', function() {
             { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
         ].forEach(opt => {
             it(`should get HTTP header ${opt.name}`, function() {
-                smartcare.login("un", "pw", validHandlers);
+                smartcare.login('un', 'pw');
                 assert.equal(this.post.firstCall.args[0]['headers'][opt.name], opt.val);
             });
         });
         it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function() {
-            smartcare.login("un", "pw", validHandlers);
+            smartcare.login('un', 'pw');
             assert(this.post.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
         });
         Object.keys(validBody).forEach(key => {
             it(`should put ${key} property in body`, function() {
-                smartcare.login("un", "pw", validHandlers);
+                smartcare.login('un', 'pw');
                 assert.equal(this.post.firstCall.args[0]['json'][key], validBody[key]);
             });
         });
     });
     describe('initial response', function() {
-        it(`should call onError on error`, function(done) {
+        it(`should include error argument on error`, function(done) {
             var err = new Error('aaa');
             this.post.callsArgWith(1, err);
 
-            validHandlers.onError = err => {
+            smartcare.login('un', 'pw', (err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
-            };
-            smartcare.login("un", "pw", validHandlers);
+            });
         });
-        it(`should call onError on missing WWW-Authenticate`, function(done) {
+        it(`should include error argument on missing WWW-Authenticate`, function(done) {
             var rsp = { headers: { "Other-Header": 'value' } }
             this.post.callsArgWith(1, null, rsp);
 
-            validHandlers.onError = err => {
+            smartcare.login('un', 'pw', (err, rsp) => {
                 assert(err.message.startsWith('Challenge'));
                 done();
-            };
-            smartcare.login("un", "pw", validHandlers);
+            });
         });
-        it(`should call onError on wrong WWW-Authenticate type`, function(done) {
+        it(`should include error argument on wrong WWW-Authenticate type`, function(done) {
             var rsp = { headers: { "WWW-Authenticate": 'Basic realm="sc.com"' } }
             this.post.callsArgWith(1, null, rsp);
 
-            validHandlers.onError = err => {
+            smartcare.login('un', 'pw', (err, rsp) => {
                 assert(err.message.startsWith('Challenge'));
                 done();
-            };
-            smartcare.login("un", "pw", validHandlers);
+            });
         });
     });
-    describe('final request', function() {
+    describe('second request', function() {
         var validFirstResponse = { headers: { "WWW-Authenticate": "T3Auth aaa" } };
 
         beforeEach(function() {
@@ -205,8 +181,7 @@ describe('login()', function() {
             'X-SpeechCycle-SmartCare-ApplicationID',
         ].forEach(hdr => {
             it(`should POST with same ${hdr} header`, function(done) {
-                validHandlers.onError = err => { done(); };
-                smartcare.login("un", "pw", validHandlers);
+                smartcare.login('un', 'pw', (err, rsp) => { done(); });
 
                 assert.equal(this.post.secondCall.args[0]['headers'][hdr], this.post.firstCall.args[0]['headers'][hdr]);
             });
@@ -215,8 +190,7 @@ describe('login()', function() {
             var config = validConfig.clone();
             config.sessionId = '15344b6f-2131-2fa9-994e-c69103be9859';
             var scclient = new SmartCare(config);
-            validHandlers.onError = err => { done(); };
-            scclient.login("un", "pw", validHandlers);
+            scclient.login('un', 'pw', (err, rsp) => { done(); });
 
             var expected = rsp.headers["WWW-Authenticate"] + ', token="IX2y+8igk6nCN3iAw77tPoOTx74="';
             assert.equal(this.post.secondCall.args[0]['headers']['Authorization'], expected);
@@ -229,60 +203,55 @@ describe('login()', function() {
                 rsp.headers[hdr] = "T3Auth aaa"
                 this.post.callsArgWith(1, null, rsp);
 
-                validHandlers.onError = err => { done(); };
-                smartcare.login("un", "pw", validHandlers);
+                smartcare.login('un', 'pw', (err, rsp) => { done(); });
 
                 assert(this.post.secondCall.args[0]['headers']['Authorization'].startsWith(rsp.headers.hdr));
             });
         });
         Object.keys(validBody).forEach(key => {
             it(`should put ${key} property in body`, function(done) {
-                validHandlers.onError = err => { done(); };
-                smartcare.login("un", "pw", validHandlers);
+                smartcare.login('un', 'pw', (err, rsp) => { done(); });
 
                 assert.equal(this.post.secondCall.args[0]['json'][key], validBody[key]);
             });
         });
     });
-    describe('final response', function() {
+    describe('second response', function() {
         var validFirstResponse = { headers: { "WWW-Authenticate": "T3Auth aaa" } };
 
         beforeEach(function() {
             this.post.callsArgWith(1, null, validFirstResponse);
         });
 
-        it(`should call onError on error`, function(done) {
+        it(`should include error argument on error`, function(done) {
             var err = new Error('aaa');
             this.post.onSecondCall().callsArgWith(1, err);
 
-            validHandlers.onError = err => {
+            smartcare.login('un', 'pw', (err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
-            };
-            smartcare.login("un", "pw", validHandlers);
+            });
         });
-        it(`should call onError on non-200 status code`, function(done) {
+        it(`should include error argument on non-200 status code`, function(done) {
             var rsp = { statusCode: 400 }
             this.post.onSecondCall().callsArgWith(1, null, rsp);
 
-            validHandlers.onError = err => {
+            smartcare.login('un', 'pw', (err, rsp) => {
                 assert.equal(err.message, 'Authentication failed');
                 done();
-            };
-            smartcare.login("un", "pw", validHandlers);
+            });
         });
-        it(`should call onSuccess on with message body`, function(done) {
+        it(`should succeed with message body`, function(done) {
             var rsp = { statusCode: 200 };
             var body = { test: 'aaa' };
             this.post.onSecondCall().callsArgWith(1, null, rsp, body);
 
-            validHandlers.onSuccess = rsp => {
+            smartcare.login('un', 'pw', (err, rsp) => {
                 assert.equal(rsp.test, 'aaa');
                 done();
-            };
-            smartcare.login("un", "pw", validHandlers);
+            });
         });
-        it(`should call onSuccess in verbose mode`, function(done) {
+        it(`should succeed in verbose mode`, function(done) {
             var config = validConfig.clone();
             config.verbose = true;
             var t3client = new SmartCare(config);
@@ -290,21 +259,16 @@ describe('login()', function() {
             var body = { test: 'aaa' };
             this.post.onSecondCall().callsArgWith(1, null, rsp, body);
 
-            validHandlers.onSuccess = rsp => {
+            t3client.login('un', 'pw', (err, rsp) => {
                 assert.equal(rsp.test, 'aaa');
                 done();
-            };
-            t3client.login("un", "pw", validHandlers);
+            });
         });
     });
 });
 
 describe('isAuthenticated', function () {
     var smartcare = new SmartCare(validConfig);
-    var validHandlers = {
-        onSuccess: function (rsp) { },
-        onError: function (err) { }
-    };
     var validFirstResponse = { headers: { "WWW-Authenticate": "T3Auth aaa" } };
     var validSecondResponse = { statusCode: 200 };
 
@@ -324,39 +288,36 @@ describe('isAuthenticated', function () {
         var body = { test: 'aaa' };
         this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
 
-        validHandlers.onSuccess = rsp => { done(); };
-        smartcare.login("un", "pw", validHandlers);
-
-        assert(!smartcare.isAuthenticated);
+        smartcare.login('un', 'pw', (err, rsp) => {
+            assert(!smartcare.isAuthenticated);
+            done();
+        });
     });
     [null, ""].forEach(val => {
         it(`should be false when T3Token is '${val}'`, function (done) {
             var body = { test: 'aaa' };
             this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
 
-            validHandlers.onSuccess = rsp => { done(); };
-            smartcare.login("un", "pw", validHandlers);
-
-            assert(!smartcare.isAuthenticated);
+            smartcare.login('un', 'pw', (err, rsp) => {
+                assert(!smartcare.isAuthenticated);
+                done();
+            });
         });
     });
     it(`should be true when T3Token is non-empty`, function (done) {
         var body = { T3Token: 'aaa' };
         this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
 
-        validHandlers.onSuccess = rsp => { done(); };
-        smartcare.login("un", "pw", validHandlers);
+        smartcare.login('un', 'pw', (err, rsp) => {
+            assert(smartcare.isAuthenticated);
+            done();
+        });
 
-        assert(smartcare.isAuthenticated);
     });
 });
 
 describe('hasActions', function () {
     var smartcare = new SmartCare(validConfig);
-    var validHandlers = {
-        onSuccess: function (rsp) { },
-        onError: function (err) { }
-    };
     var validResponse = { statusCode: 200 };
     var validBody = {
         ServiceItems: [{
@@ -381,19 +342,15 @@ describe('hasActions', function () {
     it(`should be true when actions are present`, function (done) {
         this.get.callsArgWith(1, null, validResponse, validBody);
 
-        validHandlers.onSuccess = rsp => { done(); };
-        smartcare.refreshTouchmap(validHandlers);
-
-        assert(smartcare.hasActions);
+        smartcare.refreshTouchmap((err, rsp) => {
+            assert(smartcare.hasActions);
+            done();
+        });
     });
 });
 
 describe('hasMenu', function () {
     var smartcare = new SmartCare(validConfig);
-    var validHandlers = {
-        onSuccess: function (rsp) { },
-        onError: function (err) { }
-    };
     var validResponse = { statusCode: 200 };
     var validBody = {
         ServiceItems: [{
@@ -418,19 +375,15 @@ describe('hasMenu', function () {
     it(`should be true when actions are present`, function (done) {
         this.get.callsArgWith(1, null, validResponse, validBody);
 
-        validHandlers.onSuccess = rsp => { done(); };
-        smartcare.refreshTouchmap(validHandlers);
-
-        assert(smartcare.hasMenu);
+        smartcare.refreshTouchmap((err, rsp) => {
+            assert(smartcare.hasMenu);
+            done();
+        });
     });
 });
 
 describe('refreshTouchmap()', function() {
     var smartcare = new SmartCare(validConfig);
-    var validHandlers = {
-        onSuccess: function(rsp) { },
-        onError: function(err) { }
-    };
 
     beforeEach(function() {
         this.get = sinon.stub(request, 'get');
@@ -443,37 +396,18 @@ describe('refreshTouchmap()', function() {
         var config = validConfig.clone();
         delete config.endpoints.search;
         var scclient = new SmartCare(config);
-        assert.throws(() => scclient.refreshTouchmap(validHandlers), Error);
+        assert.throws(() => scclient.refreshTouchmap(), Error);
     });
-    it(`should throw when handlers are undefined`, function() {
-        assert.throws(() => smartcare.refreshTouchmap(), Error);
-    });
-    it(`should throw when handlers are null`, function() {
-        assert.throws(() => smartcare.refreshTouchmap(null), Error);
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        it(`should throw when ${hand} handler is missing`, function() {
-            let invalidHandlers = Object.assign({}, validHandlers);
-            delete invalidHandlers[hand];
-            assert.throws(() => smartcare.refreshTouchmap(invalidHandlers), Error);
-        });
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        badHandlerValues.forEach(val => {
-            it(`should throw when ${hand} handler is '${val}'`, function() {
-                let invalidHandlers = Object.assign({}, validHandlers);
-                invalidHandlers[hand] = val;
-                assert.throws(() => smartcare.refreshTouchmap(invalidHandlers), Error);
-            });
-        });
+    it(`should throw when callback is wrong type`, function() {
+        assert.throws(() => smartcare.refreshTouchmap('string'), Error);
     });
     describe('request', function() {
         it(`should get configured url`, function() {
-            smartcare.refreshTouchmap(validHandlers);
+            smartcare.refreshTouchmap();
             assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.search + '/touch-map');
         });
         it(`should enable json`, function() {
-            smartcare.refreshTouchmap(validHandlers);
+            smartcare.refreshTouchmap();
             assert(this.get.firstCall.args[0].json);
         });
         [
@@ -481,12 +415,12 @@ describe('refreshTouchmap()', function() {
             { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
         ].forEach(opt => {
             it(`should get HTTP header ${opt.name}`, function() {
-                smartcare.refreshTouchmap(validHandlers);
+                smartcare.refreshTouchmap();
                 assert.equal(this.get.firstCall.args[0]['headers'][opt.name], opt.val);
             });
         });
         it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function() {
-            smartcare.refreshTouchmap(validHandlers);
+            smartcare.refreshTouchmap();
             assert(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
         });
     });
@@ -505,61 +439,59 @@ describe('refreshTouchmap()', function() {
             delete smartcare.actions;
         });
 
-        it(`should call onError on error`, function(done) {
+        it(`should include error argument on error`, function(done) {
             var err = new Error('aaa');
             this.get.callsArgWith(1, err);
 
-            validHandlers.onError = err => {
+            smartcare.refreshTouchmap((err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
-            };
-            smartcare.refreshTouchmap(validHandlers);
+            });
         });
-        it(`should call onError on non-200 status code`, function(done) {
+        it(`should include error argument on non-200 status code`, function(done) {
             var rsp = { statusCode: 400 }
             this.get.callsArgWith(1, null, rsp);
 
-            validHandlers.onError = err => {
+            smartcare.refreshTouchmap((err, rsp) => {
                 assert.equal(err.message, 'Touchmap refresh failed');
                 done();
-            };
-            smartcare.refreshTouchmap(validHandlers);
+            });
         });
-        it(`should call onSuccess on 200 OK`, function (done) {
+        it(`should succeed on 200 OK`, function (done) {
             var rsp = { statusCode: 200 }
             this.get.callsArgWith(1, null, rsp, validBody);
 
-            validHandlers.onSuccess = rsp => { done(); };
-            smartcare.refreshTouchmap(validHandlers);
+            smartcare.refreshTouchmap((err, rsp) => {
+                if (err) return;
+                done();
+            });
         });
-        it(`should call onSuccess in verbose mode`, function (done) {
+        it(`should succeed in verbose mode`, function (done) {
             var config = validConfig.clone();
             config.verbose = true;
             var scclient = new SmartCare(config);
             var rsp = { statusCode: 200 }
             this.get.callsArgWith(1, null, rsp, validBody);
 
-            validHandlers.onSuccess = rsp => { done(); };
-            scclient.refreshTouchmap(validHandlers);
+            scclient.refreshTouchmap((err, rsp) => {
+                if (err) return;
+                done();
+            });
         });
         it(`should save Actions`, function (done) {
             var rsp = { statusCode: 200 }
             this.get.callsArgWith(1, null, rsp, validBody);
 
-            validHandlers.onSuccess = rsp => { done(); };
-            smartcare.refreshTouchmap(validHandlers);
-
-            assert(smartcare.hasActions);
+            smartcare.refreshTouchmap((err, rsp) => {
+                assert(smartcare.hasActions);
+                done();
+            });
         });
     });
 });
 
 describe('search()', function () {
     var smartcare = new SmartCare(validConfig);
-    var validHandlers = {
-        onSuccess: function (rsp) { },
-        onError: function (err) { }
-    };
 
     beforeEach(function () {
         this.get = sinon.stub(request, 'get');
@@ -572,46 +504,27 @@ describe('search()', function () {
         var config = validConfig.clone();
         delete config.endpoints.search;
         var scclient = new SmartCare(config);
-        assert.throws(() => scclient.search('query', validHandlers), Error);
+        assert.throws(() => scclient.search('query'), Error);
     });
     badStringValues.forEach(arg => {
         it(`should throw when query is '${arg}'`, function () {
-            assert.throws(() => smartcare.search(arg, validHandlers), Error);
+            assert.throws(() => smartcare.search(arg), Error);
         });
     });
-    it(`should throw when handlers are undefined`, function () {
-        assert.throws(() => smartcare.search('query'), Error);
-    });
-    it(`should throw when handlers are null`, function () {
-        assert.throws(() => smartcare.search('query', null), Error);
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        it(`should throw when ${hand} handler is missing`, function () {
-            let invalidHandlers = Object.assign({}, validHandlers);
-            delete invalidHandlers[hand];
-            assert.throws(() => smartcare.search('query', invalidHandlers), Error);
-        });
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        badHandlerValues.forEach(val => {
-            it(`should throw when ${hand} handler is '${val}'`, function () {
-                let invalidHandlers = Object.assign({}, validHandlers);
-                invalidHandlers[hand] = val;
-                assert.throws(() => smartcare.search('query', invalidHandlers), Error);
-            });
-        });
+    it(`should throw when callback is wrong type`, function () {
+        assert.throws(() => smartcare.search('query', 'string'), Error);
     });
     describe('request', function () {
         it(`should get configured url`, function () {
-            smartcare.search('query', validHandlers);
+            smartcare.search('query');
             assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.search + '/simple');
         });
         it(`should enable json`, function () {
-            smartcare.search('query', validHandlers);
+            smartcare.search('query');
             assert(this.get.firstCall.args[0].json);
         });
         it(`should add query string`, function () {
-            smartcare.search('query', validHandlers);
+            smartcare.search('query');
             assert.equal(this.get.firstCall.args[0].qs.text, 'query');
         });
         [
@@ -619,71 +532,68 @@ describe('search()', function () {
             { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
         ].forEach(opt => {
             it(`should get HTTP header ${opt.name}`, function () {
-                smartcare.search('query', validHandlers);
+                smartcare.search('query');
                 assert.equal(this.get.firstCall.args[0]['headers'][opt.name], opt.val);
             });
         });
         it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function () {
-            smartcare.search('query', validHandlers);
+            smartcare.search('query');
             assert(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
         });
     });
     describe('response', function (done) {
         var validResponse = { statusCode: 200 }
 
-        it(`should call onError on error`, function (done) {
+        it(`should include error argument on error`, function (done) {
             var err = new Error('aaa');
             this.get.callsArgWith(1, err);
 
-            validHandlers.onError = err => {
+            smartcare.search('query', (err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
-            };
-            smartcare.search('query', validHandlers);
+            });
         });
-        it(`should call onError on non-200 status code`, function (done) {
+        it(`should include error argument on non-200 status code`, function (done) {
             var rsp = { statusCode: 400 };
             this.get.callsArgWith(1, null, rsp);
 
-            validHandlers.onError = err => {
+            smartcare.search('query', (err, rsp) => {
                 assert.equal(err.message, 'Search failed');
                 done();
-            };
-            smartcare.search('query', validHandlers);
+            });
         });
-        it(`should call onSuccess on 200 OK`, function (done) {
+        it(`should succeed on 200 OK`, function (done) {
             this.get.callsArgWith(1, null, validResponse, {});
 
-            validHandlers.onSuccess = rsp => { done(); };
-            smartcare.search('query', validHandlers);
+            smartcare.search('query', (err, rsp) => {
+                if (err) return;
+                done();
+            });
         });
-        it(`should call onSuccess in verbose mode`, function (done) {
+        it(`should succeed in verbose mode`, function (done) {
             var config = validConfig.clone();
             config.verbose = true;
             var scclient = new SmartCare(config);
             this.get.callsArgWith(1, null, validResponse, {});
 
-            validHandlers.onSuccess = rsp => { done(); };
-            scclient.search('query', validHandlers);
+            scclient.search('query', (err, rsp) => {
+                if (err) return;
+                done();
+            });
         });
-        it(`should call onSuccess with results`, function (done) {
+        it(`should succeed with results`, function (done) {
             this.get.callsArgWith(1, null, validResponse, { expected: true });
 
-            validHandlers.onSuccess = rsp => {
+            smartcare.search('query', (err, rsp) => {
                 assert(rsp.expected);
                 done();
-            };
-            smartcare.search('query', validHandlers);
+            });
         });
     });
 });
 
 describe('getAccount()', function () {
     var smartcare = new SmartCare(validConfig);
-    var validHandlers = {
-        onSuccess: function (rsp) { },
-        onError: function (err) { }
-    };
 
     beforeEach(function () {
         this.get = sinon.stub(request, 'get');
@@ -697,41 +607,22 @@ describe('getAccount()', function () {
         var config = validConfig.clone();
         delete config.endpoints.account;
         var scclient = new SmartCare(config);
-        assert.throws(() => scclient.getAccount(validHandlers), Error);
+        assert.throws(() => scclient.getAccount(), Error);
     });
-    it(`should throw when handlers are undefined`, function () {
-        assert.throws(() => smartcare.getAccount(), Error);
-    });
-    it(`should throw when handlers are null`, function () {
-        assert.throws(() => smartcare.getAccount(null), Error);
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        it(`should throw when ${hand} handler is missing`, function () {
-            let invalidHandlers = Object.assign({}, validHandlers);
-            delete invalidHandlers[hand];
-            assert.throws(() => smartcare.getAccount(invalidHandlers), Error);
-        });
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        badHandlerValues.forEach(val => {
-            it(`should throw when ${hand} handler is '${val}'`, function () {
-                let invalidHandlers = Object.assign({}, validHandlers);
-                invalidHandlers[hand] = val;
-                assert.throws(() => smartcare.getAccount(invalidHandlers), Error);
-            });
-        });
+    it(`should throw when callback is wrong type`, function () {
+        assert.throws(() => smartcare.getAccount('string'), Error);
     });
     it(`should throw when not authenticated`, function () {
         smartcare.auth = null;
-        assert.throws(() => smartcare.getAccount(validHandlers), Error);
+        assert.throws(() => smartcare.getAccount(), Error);
     });
     describe('request', function () {
         it(`should get configured url`, function () {
-            smartcare.getAccount(validHandlers);
+            smartcare.getAccount();
             assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.account + '/account/get-by-number');
         });
         it(`should enable json`, function () {
-            smartcare.getAccount(validHandlers);
+            smartcare.getAccount();
             assert(this.get.firstCall.args[0].json);
         });
         [
@@ -739,72 +630,69 @@ describe('getAccount()', function () {
             { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
         ].forEach(opt => {
             it(`should get HTTP header ${opt.name}`, function () {
-                smartcare.getAccount(validHandlers);
+                smartcare.getAccount();
                 assert.equal(this.get.firstCall.args[0]['headers'][opt.name], opt.val);
             });
         });
         it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function () {
-            smartcare.getAccount(validHandlers);
+            smartcare.getAccount();
             assert(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
         });
     });
     describe('response', function (done) {
         var validResponse = { statusCode: 200 }
 
-        it(`should call onError on error`, function (done) {
+        it(`should include error argument on error`, function (done) {
             var err = new Error('aaa');
             this.get.callsArgWith(1, err);
 
-            validHandlers.onError = err => {
+            smartcare.getAccount((err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
-            };
-            smartcare.getAccount(validHandlers);
+            });
         });
-        it(`should call onError on non-200 status code`, function (done) {
+        it(`should include error argument on non-200 status code`, function (done) {
             var rsp = { statusCode: 400 };
             this.get.callsArgWith(1, null, rsp);
 
-            validHandlers.onError = err => {
+            smartcare.getAccount((err, rsp) => {
                 assert.equal(err.message, 'Account lookup failed');
                 done();
-            };
-            smartcare.getAccount(validHandlers);
+            });
         });
-        it(`should call onSuccess on 200 OK`, function (done) {
+        it(`should succeed on 200 OK`, function (done) {
             this.get.callsArgWith(1, null, validResponse, {});
 
-            validHandlers.onSuccess = rsp => { done(); };
-            smartcare.getAccount(validHandlers);
+            smartcare.getAccount((err, rsp) => {
+                if (err) return;
+                done();
+            });
         });
-        it(`should call onSuccess in verbose mode`, function (done) {
+        it(`should succeed in verbose mode`, function (done) {
             var config = validConfig.clone();
             config.verbose = true;
             var scclient = new SmartCare(config);
             scclient.auth = { T3Token: '1234' };
             this.get.callsArgWith(1, null, validResponse, {});
 
-            validHandlers.onSuccess = rsp => { done(); };
-            scclient.getAccount(validHandlers);
+            scclient.getAccount((err, rsp) => {
+                if (err) return;
+                done();
+            });
         });
-        it(`should call onSuccess with results`, function (done) {
+        it(`should succeed with results`, function (done) {
             this.get.callsArgWith(1, null, validResponse, { expected: true });
 
-            validHandlers.onSuccess = rsp => {
+            smartcare.getAccount((err, rsp) => {
                 assert(rsp.expected);
                 done();
-            };
-            smartcare.getAccount(validHandlers);
+            });
         });
     });
 });
 
 describe('getStatements()', function () {
     var smartcare = new SmartCare(validConfig);
-    var validHandlers = {
-        onSuccess: function (rsp) { },
-        onError: function (err) { }
-    };
     var validAuth = {
         T3Token: '1234',
         Value: 'value'
@@ -823,64 +711,45 @@ describe('getStatements()', function () {
     });
     ['a string', -1, 0].forEach(count => {
         it(`should throw when count is ${count}`, function () {
-            assert.throws(() => smartcare.getStatements(count, false, validHandlers), Error);
+            assert.throws(() => smartcare.getStatements(count, false), Error);
         });
     });
     it(`should throw when pdf is undefined`, function () {
         assert.throws(() => smartcare.getStatements(1), Error);
     });
     it(`should throw when pdf is wrong type`, function () {
-        assert.throws(() => smartcare.getStatements(1, 'string', validHandlers), Error);
+        assert.throws(() => smartcare.getStatements(1, 'string'), Error);
     });
     it(`should throw without account endpoint`, function () {
         var config = validConfig.clone();
         delete config.endpoints.account;
         var scclient = new SmartCare(config);
-        assert.throws(() => scclient.getStatements(1, false, validHandlers), Error);
+        assert.throws(() => scclient.getStatements(1, false), Error);
     });
-    it(`should throw when handlers are undefined`, function () {
-        assert.throws(() => smartcare.getStatements(1, false), Error);
-    });
-    it(`should throw when handlers are null`, function () {
-        assert.throws(() => smartcare.getStatements(1, false, null), Error);
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        it(`should throw when ${hand} handler is missing`, function () {
-            let invalidHandlers = Object.assign({}, validHandlers);
-            delete invalidHandlers[hand];
-            assert.throws(() => smartcare.getStatements(1, false, invalidHandlers), Error);
-        });
-    });
-    Object.keys(validHandlers).forEach(hand => {
-        badHandlerValues.forEach(val => {
-            it(`should throw when ${hand} handler is '${val}'`, function () {
-                let invalidHandlers = Object.assign({}, validHandlers);
-                invalidHandlers[hand] = val;
-                assert.throws(() => smartcare.getStatements(1, false, invalidHandlers), Error);
-            });
-        });
+    it(`should throw when callback is wrong type`, function () {
+        assert.throws(() => smartcare.getStatements(1, false, 'string'), Error);
     });
     it(`should throw when not authenticated`, function () {
         smartcare.auth = null;
-        assert.throws(() => smartcare.getStatements(1, false, validHandlers), Error);
+        assert.throws(() => smartcare.getStatements(1, false), Error);
     });
     describe('request', function () {
         it(`should get configured url`, function () {
-            smartcare.getStatements(1, false, validHandlers);
+            smartcare.getStatements(1, false);
             assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.account + '/bill/1');
         });
         it(`should use pdf endpoint`, function () {
-            smartcare.getStatements(1, true, validHandlers);
+            smartcare.getStatements(1, true);
             assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.account + '/pdf-statement/1');
         });
         [2, 3].forEach(count => {
             it(`should change endpoint when count is ${count}`, function () {
-                smartcare.getStatements(count, false, validHandlers);
+                smartcare.getStatements(count, false);
                 assert.equal(this.get.firstCall.args[0].url, validConfig.endpoints.account + '/bill/' + count);
             });
         });
         it(`should enable json`, function () {
-            smartcare.getStatements(1, false, validHandlers);
+            smartcare.getStatements(1, false);
             assert(this.get.firstCall.args[0].json);
         });
         [
@@ -891,72 +760,74 @@ describe('getStatements()', function () {
             { name: 'X-SpeechCycle-SmartCare-T3Token', val: validAuth.T3Token }
         ].forEach(opt => {
             it(`should get HTTP header ${opt.name}`, function () {
-                smartcare.getStatements(1, false, validHandlers);
+                smartcare.getStatements(1, false);
                 assert.equal(this.get.firstCall.args[0]['headers'][opt.name], opt.val);
             });
         });
         it(`should get HTTP header X-SpeechCycle-SmartCare-AdditionalValues when values are present`, function () {
             Object.assign(smartcare.auth, { AdditionalValues: [1] });
-            smartcare.getStatements(1, false, validHandlers);
+            smartcare.getStatements(1, false);
             assert.equal(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-AdditionalValues'], '1');
         });
         it(`should get HTTP header X-SpeechCycle-SmartCare-AdditionalValues when multiple values are present`, function () {
             Object.assign(smartcare.auth, { AdditionalValues: [1,2,3] });
-            smartcare.getStatements(1, false, validHandlers);
+            smartcare.getStatements(1, false);
             assert.equal(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-AdditionalValues'], '1,2,3');
         });
         it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function () {
-            smartcare.getStatements(1, false, validHandlers);
+            smartcare.getStatements(1, false);
             assert(this.get.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
         });
     });
     describe('response', function (done) {
         var validResponse = { statusCode: 200 }
 
-        it(`should call onError on error`, function (done) {
+        it(`should include error argument on error`, function (done) {
             var err = new Error('aaa');
             this.get.callsArgWith(1, err);
 
-            validHandlers.onError = err => {
+            smartcare.getStatements(1, false, (err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
-            };
-            smartcare.getStatements(1, false, validHandlers);
+            });
         });
-        it(`should call onError on non-200 status code`, function (done) {
+        it(`should include error argument on non-200 status code`, function (done) {
             var rsp = { statusCode: 400 };
             this.get.callsArgWith(1, null, rsp);
 
-            validHandlers.onError = err => {
+            smartcare.getStatements(1, false, (err, rsp) => {
                 assert.equal(err.message, 'Statement lookup failed');
                 done();
-            };
-            smartcare.getStatements(1, false, validHandlers);
+            });
         });
-        it(`should call onSuccess on 200 OK`, function (done) {
+        it(`should succeed on 200 OK`, function (done) {
             this.get.callsArgWith(1, null, validResponse, {});
 
-            validHandlers.onSuccess = rsp => { done(); };
-            smartcare.getStatements(1, false, validHandlers);
+            smartcare.getStatements(1, false, (err, rsp) => {
+                if (err) return;
+                done();
+            });
         });
-        it(`should call onSuccess in verbose mode`, function (done) {
+        it(`should succeed in verbose mode`, function (done) {
             var config = validConfig.clone();
             config.verbose = true;
             var scclient = new SmartCare(config);
             scclient.auth = validAuth;
             this.get.callsArgWith(1, null, validResponse, {});
 
-            validHandlers.onSuccess = rsp => { done(); };
-            scclient.getStatements(1, false, validHandlers);
+            scclient.getStatements(1, false, (err, rsp) => {
+                if (err) return;
+                done();
+            });
         });
-        it(`should call onSuccess with results`, function (done) {
+        it(`should succeed with results`, function (done) {
             this.get.callsArgWith(1, null, validResponse, { expected: true });
 
-            validHandlers.onSuccess = rsp => {
+            smartcare.getStatements(1, false, (err, rsp) => {
+                if (err) return;
                 assert(rsp.expected);
                 done();
-            };
-            smartcare.getStatements(1, false, validHandlers);
+            });
         });
     });
 });
