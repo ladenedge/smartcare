@@ -288,7 +288,12 @@ class SmartCare {
         });
     }
 
+    /**
+     * Retrieves a user's dashboard items.
+     * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
+     */
     dashboard(callback) {
+        callback = validator.validateCallback(callback);
         if (!this.isAuthenticated)
             throw new Error('An active login is required');
 
