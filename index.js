@@ -1,6 +1,8 @@
 'use strict';
 
+var url = require('url');
 var request = require('request');
+var async = require('async');
 var t3util = require('./lib/t3util');
 var insensitiveGet = require('./lib/insensitive-get');
 var validator = require('./lib/validate');
@@ -17,8 +19,10 @@ var configSchema = [
 
 var endpointsSchema = [
     { key: 'login', type: 'string', req: false },
+    { key: 'signin', type: 'string', req: false },
     { key: 'search', type: 'string', req: false },
     { key: 'account', type: 'string', req: false },
+    { key: 'dashboard', type: 'string', req: false },
     { key: 'proxy', type: 'string', req: false }
 ];
 
@@ -79,6 +83,7 @@ class SmartCare {
     constructor(config) {
         this.config = validator.validateConfig(config, configSchema);
         this.config.endpoints = validator.validateConfig(config.endpoints, endpointsSchema);
+        this.cookies = request.jar();
     }
 
     /**
@@ -93,6 +98,7 @@ class SmartCare {
         username = validator.validateString(username, 'username');
         password = validator.validateString(password, 'password');
         validator.validateString(this.config.endpoints.login, 'login endpoint');
+        validator.validateString(this.config.endpoints.signin, 'signin endpoint');
         validator.validateResponseHandlers(responseHandlers);
 
         var opts = t3util.requestOptions(this.config);
@@ -123,7 +129,24 @@ class SmartCare {
                     console.error(body);
 
                 this.auth = Object.assign({}, body);
-                responseHandlers.onSuccess(body);
+
+                var opts = t3util.signinOptions(this.config, this.auth);
+                opts.jar = this.cookies;
+
+                request.post(opts, (error, rsp, body) => {
+                    if (error)
+                        return responseHandlers.onError(error);
+                    if (rsp.statusCode !== 302)
+                        return responseHandlers.onError(new Error('Signin protocol error'));
+                    var location = insensitiveGet(rsp.headers, 'Location');
+                    if (location.includes('forbidden'))
+                        return responseHandlers.onError(new Error('Signin failed'));
+
+                    var signinUrl = url.parse(this.config.endpoints.signin);
+                    this.config.endpoints.dashboard = `${signinUrl.protocol}//${signinUrl.host}${location}`;
+
+                    responseHandlers.onSuccess();
+                });
             });
         });
     }
@@ -276,6 +299,40 @@ class SmartCare {
                 console.error(body);
 
             responseHandlers.onSuccess(body);
+        });
+    }
+
+    dashboard(onComplete) {
+        if (!this.isAuthenticated)
+            throw new Error('An active login is required');
+
+        var opts = t3util.dashboardOptions(this.config, this.cookies);
+        request.debug = !!this.config.verbose;
+
+        var endpoints = [
+            'GetBillingData',
+            'GetUsageData',
+            'GetOutageData',
+            'GetAppointmentData'
+        ];
+        async.map(endpoints, (endpoint, callback) => {
+            request.post(`/${endpoint}`, opts, (error, rsp, body) => {
+                if (error)
+                    return callback(error);
+                if (rsp.statusCode !== 200)
+                    return callback(new Error('Statement lookup failed'));
+                if (this.config.verbose)
+                    console.error(body);
+                callback(null, body);
+            });
+        }, (err, results) => {
+            if (err)
+                return onComplete(err);
+            var results = results.reduce((prev, cur, i) => {
+                prev[endpoints[i].replace('Get', '')] = results[i];
+                return prev;
+            }, {});
+            onComplete(null, results);
         });
     }
 };

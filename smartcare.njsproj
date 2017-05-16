@@ -32,6 +32,10 @@
     <Compile Include="lib\insensitive-get.js" />
     <Compile Include="lib\t3util.js" />
     <Compile Include="lib\validate.js" />
+    <Compile Include="misc\realtests.js">
+      <TestFramework>Mocha</TestFramework>
+      <Publish>False</Publish>
+    </Compile>
     <Compile Include="test\tests.js">
       <Publish>False</Publish>
       <TestFramework>Mocha</TestFramework>
@@ -42,6 +46,7 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="lib\" />
+    <Folder Include="misc\" />
     <Folder Include="test\" />
   </ItemGroup>
   <!-- Do not delete the following Import Project.  While this appears to do nothing it is a marker for setting TypeScript properties before our import that depends on them. -->
