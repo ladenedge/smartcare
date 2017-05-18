@@ -75,11 +75,44 @@ class SmartCare {
      * @param {string} [config.platform] The platform on which the application is running. (Eg. 'Web', 'DesktopWeb'.)
      * @param {string} [config.agent] A name or identifier for the calling application.
      * @param {boolean} [config.verbose] Whether to output detailed logging to stderr.
+     * @param {Object} [credentials] Object containing pre-established login credentials. If present, there is no need to call one of the login() functions.
      */
-    constructor(config) {
+    constructor(config, credentials) {
         this.config = validator.validateConfig(config, configSchema);
         this.config.endpoints = validator.validateConfig(config.endpoints, endpointsSchema);
         this.cookies = request.jar();
+        if (credentials)
+            this.loginWith(credentials);
+    }
+
+    /**
+     * Attempts a combined (T3 + dashboard) authentication procedure.
+     * @param {string} username A string containing the username to authenticate.
+     * @param {string} password A string containing the user's password.
+     * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
+     */
+    login(username, password, callback) {
+        callback = validator.validateCallback(callback);
+
+        this.t3Login(username, password, (err1, t3auth) => {
+            if (err1)
+                return callback(err1);
+            this.dashboardLogin(t3auth, (err2, credentials) => {
+                if (err2)
+                    return callback(err2);
+                callback(null, credentials);
+            })
+        })
+    }
+
+    /**
+     * Logs a user in with previously-established credentials.
+     * @param {Object} credentials An object containing the credentials from an earlier login() call.
+     */
+    loginWith(credentials) {
+        validator.validateCredentials(credentials);
+        this.auth = credentials;
+        this.cookies.setCookie(credentials.DashboardCookies, credentials.DashboardEndpoint);
     }
 
     /**
@@ -88,7 +121,7 @@ class SmartCare {
      * @param {string} password A string containing the user's password.
      * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
      */
-    t3login(username, password, callback) {
+    t3Login(username, password, callback) {
         username = validator.validateString(username, 'username');
         password = validator.validateString(password, 'password');
         callback = validator.validateCallback(callback);
@@ -154,8 +187,14 @@ class SmartCare {
 
             var signinUrl = url.parse(this.config.endpoints.login_db);
             this.config.endpoints.dashboard = `${signinUrl.protocol}//${signinUrl.host}${location}`;
+            this.auth.DashboardCookies = this.cookies.getCookieString(this.config.endpoints.dashboard);
+            this.auth.DashboardEndpoint = this.config.endpoints.dashboard;
 
-            callback();
+            if (!this.auth.DashboardCookies)
+                return callback(new Error('Dashboard cookie not found'));
+
+            var credentials = Object.assign({}, this.auth);
+            callback(null, credentials);
         });
     }
 
