@@ -18,8 +18,8 @@ var configSchema = [
 ];
 
 var endpointsSchema = [
-    { key: 'login', type: 'string', req: false },
-    { key: 'signin', type: 'string', req: false },
+    { key: 'login_t3', type: 'string', req: false },
+    { key: 'login_db', type: 'string', req: false },
     { key: 'search', type: 'string', req: false },
     { key: 'account', type: 'string', req: false },
     { key: 'dashboard', type: 'string', req: false },
@@ -83,20 +83,19 @@ class SmartCare {
     }
 
     /**
-     * Attempts the authentication procedure.
+     * Attempts the T3 authentication procedure.
      * @param {string} username A string containing the username to authenticate.
      * @param {string} password A string containing the user's password.
      * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
      */
-    login(username, password, callback) {
+    t3login(username, password, callback) {
         username = validator.validateString(username, 'username');
         password = validator.validateString(password, 'password');
         callback = validator.validateCallback(callback);
-        validator.validateString(this.config.endpoints.login, 'login endpoint');
-        validator.validateString(this.config.endpoints.signin, 'signin endpoint');
+        validator.validateString(this.config.endpoints.login_t3, 'login_t3 endpoint');
 
         var opts = t3util.requestOptions(this.config);
-        opts.url = this.config.endpoints.login;
+        opts.url = this.config.endpoints.login_t3;
         opts.json = {
             'ID': username,
             'Password': password,
@@ -123,25 +122,40 @@ class SmartCare {
                     console.error(body);
 
                 this.auth = Object.assign({}, body);
-
-                var opts = t3util.signinOptions(this.config, this.auth);
-                opts.jar = this.cookies;
-
-                request.post(opts, (error, rsp, body) => {
-                    if (error)
-                        return callback(error);
-                    if (rsp.statusCode !== 302)
-                        return callback(new Error('Signin protocol error'));
-                    var location = insensitiveGet(rsp.headers, 'Location');
-                    if (location.includes('forbidden'))
-                        return callback(new Error('Signin failed'));
-
-                    var signinUrl = url.parse(this.config.endpoints.signin);
-                    this.config.endpoints.dashboard = `${signinUrl.protocol}//${signinUrl.host}${location}`;
-
-                    callback();
-                });
+                callback(null, body);
             });
+        });
+    }
+
+    /**
+     * Attempts the dashboard signin procedure.
+     * @param {Object} auth An object containing dashboard authentication parameters.
+     * @param {string} auth.Value A string identifying the user to sign in.
+     * @param {string} auth.T3Token A valid T3 token for the specified user.
+     * @param {SmartCare~callback} [callback] A response handler to be called when the function completes.
+     */
+    dashboardLogin(auth, callback) {
+        validator.validateAuth(auth);
+        callback = validator.validateCallback(callback);
+        validator.validateString(this.config.endpoints.login_db, 'login_db endpoint');
+
+        this.auth = auth;
+        var opts = t3util.signinOptions(this.config, this.auth);
+        opts.jar = this.cookies;
+
+        request.post(opts, (error, rsp, body) => {
+            if (error)
+                return callback(error);
+            if (rsp.statusCode !== 302)
+                return callback(new Error('Signin protocol error'));
+            var location = insensitiveGet(rsp.headers, 'Location');
+            if (location.includes('forbidden'))
+                return callback(new Error('Signin failed'));
+
+            var signinUrl = url.parse(this.config.endpoints.login_db);
+            this.config.endpoints.dashboard = `${signinUrl.protocol}//${signinUrl.host}${location}`;
+
+            callback();
         });
     }
 

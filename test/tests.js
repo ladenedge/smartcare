@@ -5,8 +5,8 @@ var SmartCare = require('../index');
 
 var validConfig = {
     endpoints: {
-        login: 'https://t3.sc.com/path',
-        signin: 'https://si.sc.com/path',
+        login_t3: 'https://t3.sc.com/path',
+        login_db: 'https://si.sc.com/path',
         search: 'https://s.sc.com/path',
         account: 'https://a.sc.com/path',
         dashboard: 'https://db.sc.com/path'
@@ -70,7 +70,7 @@ describe('constructor', function() {
     });
 });
 
-describe('login()', function() {
+describe('t3Login()', function () {
     var smartcare = new SmartCare(validConfig);
     var validBody = {
         ID: 'un',
@@ -78,101 +78,99 @@ describe('login()', function() {
         AdditionalValuesVersion: '2'
     };
 
-    beforeEach(function() {
+    beforeEach(function () {
         // A Sinon stub replaces the target function, so no need for DI.
         this.post = sinon.stub(request, 'post');
     });
-    afterEach(function() {
+    afterEach(function () {
         request.post.restore();
     });
 
     badStringValues.forEach(arg => {
-        it(`should throw when username is '${arg}'`, function() {
-            assert.throws(() => smartcare.login(arg, 'pw'), Error);
+        it(`should throw when username is '${arg}'`, function () {
+            assert.throws(() => smartcare.t3login(arg, 'pw'), Error);
         });
     });
     badStringValues.forEach(arg => {
-        it(`should throw when password is '${arg}'`, function() {
-            assert.throws(() => smartcare.login('un', arg), Error);
+        it(`should throw when password is '${arg}'`, function () {
+            assert.throws(() => smartcare.t3login('un', arg), Error);
         });
     });
-    ['login', 'signin'].forEach(ep => {
-        it(`should throw without ${ep} endpoint`, function () {
-            var config = validConfig.clone();
-            delete config.endpoints[ep];
-            var scclient = new SmartCare(config);
-            assert.throws(() => scclient.login('un', 'pw'), Error);
-        });
+    it(`should throw without login_t3 endpoint`, function () {
+        var config = validConfig.clone();
+        delete config.endpoints.login_t3;
+        var scclient = new SmartCare(config);
+        assert.throws(() => scclient.t3login('un', 'pw'), Error);
     });
-    it(`should throw when callback is wrong type`, function() {
-        assert.throws(() => smartcare.login('un', 'pw', 'string'), Error);
+    it(`should throw when callback is wrong type`, function () {
+        assert.throws(() => smartcare.t3login('un', 'pw', 'string'), Error);
     });
-    describe('initial request', function() {
+    describe('initial request', function () {
         [
-            { key: 'url', val: validConfig.endpoints.login },
+            { key: 'url', val: validConfig.endpoints.login_t3 },
         ].forEach(opt => {
-            it(`should get configured ${opt.key}`, function() {
-                smartcare.login('un', 'pw');
+            it(`should get configured ${opt.key}`, function () {
+                smartcare.t3login('un', 'pw');
                 assert.equal(this.post.firstCall.args[0][opt.key], opt.val);
             });
         });
-        it(`should enable json`, function() {
-            smartcare.login('un', 'pw');
+        it(`should enable json`, function () {
+            smartcare.t3login('un', 'pw');
             assert(this.post.firstCall.args[0].json);
         });
         [
             { name: 'X-SpeechCycle-SmartCare-CustomerID', val: validConfig.customer },
             { name: 'X-SpeechCycle-SmartCare-ApplicationID', val: validConfig.app },
         ].forEach(opt => {
-            it(`should get HTTP header ${opt.name}`, function() {
-                smartcare.login('un', 'pw');
+            it(`should get HTTP header ${opt.name}`, function () {
+                smartcare.t3login('un', 'pw');
                 assert.equal(this.post.firstCall.args[0]['headers'][opt.name], opt.val);
             });
         });
-        it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function() {
-            smartcare.login('un', 'pw');
+        it(`should get GUID in HTTP header X-SpeechCycle-SmartCare-SessionID`, function () {
+            smartcare.t3login('un', 'pw');
             assert(this.post.firstCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
         });
         Object.keys(validBody).forEach(key => {
-            it(`should put ${key} property in body`, function() {
-                smartcare.login('un', 'pw');
+            it(`should put ${key} property in body`, function () {
+                smartcare.t3login('un', 'pw');
                 assert.equal(this.post.firstCall.args[0]['json'][key], validBody[key]);
             });
         });
     });
-    describe('initial response', function() {
-        it(`should include error argument on error`, function(done) {
+    describe('initial response', function () {
+        it(`should include error argument on error`, function (done) {
             var err = new Error('aaa');
             this.post.callsArgWith(1, err);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.t3login('un', 'pw', (err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
             });
         });
-        it(`should include error argument on missing WWW-Authenticate`, function(done) {
+        it(`should include error argument on missing WWW-Authenticate`, function (done) {
             var rsp = { headers: { "Other-Header": 'value' } }
             this.post.callsArgWith(1, null, rsp);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.t3login('un', 'pw', (err, rsp) => {
                 assert(err.message.startsWith('Challenge'));
                 done();
             });
         });
-        it(`should include error argument on wrong WWW-Authenticate type`, function(done) {
+        it(`should include error argument on wrong WWW-Authenticate type`, function (done) {
             var rsp = { headers: { "WWW-Authenticate": 'Basic realm="sc.com"' } }
             this.post.callsArgWith(1, null, rsp);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.t3login('un', 'pw', (err, rsp) => {
                 assert(err.message.startsWith('Challenge'));
                 done();
             });
         });
     });
-    describe('second request', function() {
+    describe('second request', function () {
         var validFirstResponse = { headers: { 'WWW-Authenticate': 'T3Auth aaa' } };
 
-        beforeEach(function() {
+        beforeEach(function () {
             this.post.callsArgWith(1, null, validFirstResponse);
         });
 
@@ -181,8 +179,8 @@ describe('login()', function() {
             'X-SpeechCycle-SmartCare-CustomerID',
             'X-SpeechCycle-SmartCare-ApplicationID',
         ].forEach(hdr => {
-            it(`should POST with same ${hdr} header`, function(done) {
-                smartcare.login('un', 'pw', (err, rsp) => { done(); });
+            it(`should POST with same ${hdr} header`, function (done) {
+                smartcare.t3login('un', 'pw', (err, rsp) => { done(); });
 
                 assert.equal(this.post.secondCall.args[0]['headers'][hdr], this.post.firstCall.args[0]['headers'][hdr]);
             });
@@ -191,7 +189,7 @@ describe('login()', function() {
             var config = validConfig.clone();
             config.sessionId = '15344b6f-2131-2fa9-994e-c69103be9859';
             var scclient = new SmartCare(config);
-            scclient.login('un', 'pw', (err, rsp) => { done(); });
+            scclient.t3login('un', 'pw', (err, rsp) => { done(); });
 
             var expected = rsp.headers["WWW-Authenticate"] + ', token="IX2y+8igk6nCN3iAw77tPoOTx74="';
             assert.equal(this.post.secondCall.args[0]['headers']['Authorization'], expected);
@@ -199,161 +197,234 @@ describe('login()', function() {
         [
             'WWW-Authenticate', 'www-authenticate'
         ].forEach(hdr => {
-            it(`should POST with Authorization header from ${hdr} header`, function(done) {
+            it(`should POST with Authorization header from ${hdr} header`, function (done) {
                 var rsp = { headers: {} };
                 rsp.headers[hdr] = "T3Auth aaa"
                 this.post.callsArgWith(1, null, rsp);
 
-                smartcare.login('un', 'pw', (err, rsp) => { done(); });
+                smartcare.t3login('un', 'pw', (err, rsp) => { done(); });
 
                 assert(this.post.secondCall.args[0]['headers']['Authorization'].startsWith(rsp.headers.hdr));
             });
         });
         Object.keys(validBody).forEach(key => {
-            it(`should put ${key} property in body`, function(done) {
-                smartcare.login('un', 'pw', (err, rsp) => { done(); });
+            it(`should put ${key} property in body`, function (done) {
+                smartcare.t3login('un', 'pw', (err, rsp) => { done(); });
 
                 assert.equal(this.post.secondCall.args[0]['json'][key], validBody[key]);
             });
         });
     });
-    describe('second response', function() {
+    describe('second response', function () {
         var validFirstResponse = { headers: { 'WWW-Authenticate': 'T3Auth aaa' } };
 
-        beforeEach(function() {
+        beforeEach(function () {
             this.post.callsArgWith(1, null, validFirstResponse);
         });
 
-        it(`should include error argument on error`, function(done) {
+        it(`should include error argument on error`, function (done) {
             var err = new Error('aaa');
             this.post.onSecondCall().callsArgWith(1, err);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.t3login('un', 'pw', (err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
             });
         });
-        it(`should include error argument on non-200 status code`, function(done) {
+        it(`should include error argument on non-200 status code`, function (done) {
             var rsp = { statusCode: 400 }
             this.post.onSecondCall().callsArgWith(1, null, rsp);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.t3login('un', 'pw', (err, rsp) => {
                 assert.equal(err.message, 'Authentication failed');
                 done();
             });
         });
+        it(`should succeed with message body`, function (done) {
+            var rsp = { statusCode: 200 };
+            var body = { test: 'aaa' };
+            this.post.onSecondCall().callsArgWith(1, null, rsp, body);
+
+            smartcare.t3login('un', 'pw', (err, rsp) => {
+                assert.equal(rsp.test, 'aaa');
+                done();
+            });
+        });
+        it(`should succeed in verbose mode`, function (done) {
+            var config = validConfig.clone();
+            config.verbose = true;
+            var t3client = new SmartCare(config);
+            var rsp = { statusCode: 200 };
+            var body = { test: 'aaa' };
+            this.post.onSecondCall().callsArgWith(1, null, rsp, body);
+
+            t3client.t3login('un', 'pw', (err, rsp) => {
+                assert.equal(rsp.test, 'aaa');
+                done();
+            });
+        });
+    });
+});
+
+describe('dashboardLogin()', function () {
+    var smartcare = new SmartCare(validConfig);
+    var validAuth = {
+        Value: 'username',
+        T3Token: '1234',
+    };
+
+    beforeEach(function () {
+        this.post = sinon.stub(request, 'post');
+    });
+    afterEach(function () {
+        request.post.restore();
+    });
+
+    it(`should throw when auth is undefined`, function () {
+        assert.throws(() => smartcare.dashboardLogin(), Error);
+    });
+    it(`should throw when auth is null`, function () {
+        assert.throws(() => smartcare.dashboardLogin(null), Error);
+    });
+    it(`should throw when auth is wrong type`, function () {
+        assert.throws(() => smartcare.dashboardLogin('string'), Error);
+    });
+    badStringValues.forEach(arg => {
+        it(`should throw when Value is '${arg}'`, function () {
+            var auth = { Value: arg, T3Token: '1234' };
+            assert.throws(() => smartcare.dashboardLogin(auth), Error);
+        });
+    });
+    badStringValues.forEach(arg => {
+        it(`should throw when T3Token is '${arg}'`, function () {
+            var auth = { Value: 'username', T3Token: arg };
+            assert.throws(() => smartcare.dashboardLogin(auth), Error);
+        });
+    });
+    it(`should throw without login_db endpoint`, function () {
+        var config = validConfig.clone();
+        delete config.endpoints.login_db;
+        var scclient = new SmartCare(config);
+        assert.throws(() => scclient.dashboardLogin(validAuth), Error);
+    });
+    it(`should throw when callback is wrong type`, function () {
+        assert.throws(() => smartcare.dashboardLogin(validAuth, 'string'), Error);
     });
     describe('forms signin request', function () {
-        var validFirstResponse = { headers: { 'WWW-Authenticate': 'T3Auth aaa' } };
-        var validSecondBody = { Value: '1234', T3Token: 'aaa', AdditionalValues: [1, 2] };
-        var validThirdResponse = { statusCode: 302, headers: { 'Location': '/test' } };
+        var validResponse = { statusCode: 302, headers: { 'Location': '/test' } };
 
         beforeEach(function () {
-            this.post.onFirstCall().callsArgWith(1, null, validFirstResponse);
-            this.post.onSecondCall().callsArgWith(1, null, { statusCode: 200 }, validSecondBody);
-            this.post.onThirdCall().callsArgWith(1, null, validThirdResponse);
+            this.post.callsArgWith(1, null, validResponse);
         });
 
         [
-            { key: 'url', val: validConfig.endpoints.signin },
+            { key: 'url', val: validConfig.endpoints.login_db },
         ].forEach(opt => {
             it(`should get configured ${opt.key}`, function (done) {
-                smartcare.login('un', 'pw', (err, rsp) => {
-                    assert.equal(this.post.thirdCall.args[0][opt.key], opt.val);
+                smartcare.dashboardLogin(validAuth, (err, rsp) => {
+                    assert.equal(this.post.firstCall.args[0][opt.key], opt.val);
                     done();
                 });
             });
         });
         it(`should get cookie jar`, function (done) {
-            smartcare.login('un', 'pw', (err, rsp) => {
-                assert.equal(typeof this.post.thirdCall.args[0].jar, 'object');
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
+                assert.equal(typeof this.post.firstCall.args[0].jar, 'object');
                 done();
             });
         });
         [
             { name: 's_customerId', val: validConfig.customer },
             { name: 's_applicationId', val: validConfig.app },
-            { name: 's_userId', val: '1234' },
-            { name: 's_userName', val: '1234' },
-            { name: 's_userData', val: '1234' },
-            { name: 's_t3token', val: 'aaa' },
-            { name: 's_platform', val: '' },
+            { name: 's_userId', val: validAuth.Value },
+            { name: 's_userName', val: validAuth.Value },
+            { name: 's_userData', val: '' },
+            { name: 's_t3token', val: validAuth.T3Token },
+            { name: 's_platform', val: 'All' },
             { name: 's_applicationVersion', val: '2' },
-            { name: 's_additionalValues', val: '1,2' }
+            { name: 's_additionalValues', val: null }
         ].forEach(param => {
             it(`should POST with ${param.name} in body`, function (done) {
-                smartcare.login('un', 'pw', (err, rsp) => { done(); });
-                assert.equal(this.post.thirdCall.args[0]['form'][param.name], param.val);
+                smartcare.dashboardLogin(validAuth, (err, rsp) => {
+                    assert.equal(this.post.firstCall.args[0]['form'][param.name], param.val);
+                    done();
+                });
             });
         });
         it(`should POST with s_sessionId in body`, function (done) {
-            smartcare.login('un', 'pw', (err, rsp) => { done(); });
-            assert.equal(this.post.thirdCall.args[0]['form']['s_sessionId'],
-                this.post.secondCall.args[0]['headers']['X-SpeechCycle-SmartCare-SessionID']);
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
+                assert(this.post.firstCall.args[0]['form']['s_sessionId'].match(/[0-9A-F]{8}-?([0-9A-F]{4}-?){3}-?[0-9A-F]{12}/i));
+                done();
+            });
+        });
+        it(`should POST with s_additionalValues when AdditionalValues are present`, function (done) {
+            var auth = { Value: 'username', T3Token: 'aaa', AdditionalValues: [1, 2] };
+            smartcare.dashboardLogin(auth, (err, rsp) => {
+                assert.equal(this.post.firstCall.args[0]['form']['s_additionalValues'], '1,2');
+                done();
+            });
         });
         it(`should POST with Accept header`, function (done) {
-            smartcare.login('un', 'pw', (err, rsp) => { done(); });
-            assert.equal(this.post.thirdCall.args[0]['headers']['Accept'], 'application/json');
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
+                assert.equal(this.post.firstCall.args[0]['headers']['Accept'], 'application/json');
+                done();
+            });
         });
     });
     describe('forms signin response', function () {
-        var validFirstResponse = { headers: { 'WWW-Authenticate': 'T3Auth aaa' } };
-        var validSecondBody = { Value: '1234', T3Token: 'aaa', AdditionalValues: [1, 2] };
-        var validThirdResponse = { statusCode: 302, headers: { 'Location': '/test' } };
+        var validResponse = { statusCode: 302, headers: { 'Location': '/test' } };
 
         beforeEach(function () {
-            this.post.onFirstCall().callsArgWith(1, null, validFirstResponse);
-            this.post.onSecondCall().callsArgWith(1, null, { statusCode: 200 }, validSecondBody);
-            this.post.onThirdCall().callsArgWith(1, null, validThirdResponse);
+            this.post.callsArgWith(1, null, validResponse);
         });
 
         it(`should include error argument on error`, function (done) {
             var err = new Error('aaa');
-            this.post.onThirdCall().callsArgWith(1, err);
+            this.post.callsArgWith(1, err);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
                 assert.equal(err.message, 'aaa');
                 done();
             });
         });
         it(`should include error argument on non-302 status code`, function (done) {
             var rsp = { statusCode: 400 }
-            this.post.onThirdCall().callsArgWith(1, null, rsp);
+            this.post.callsArgWith(1, null, rsp);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
                 assert.equal(err.message, 'Signin protocol error');
                 done();
             });
         });
         it(`should include error argument on forbidden Location`, function (done) {
             var rsp = { statusCode: 302, headers: { 'Location': '/test/forbidden/test' } };
-            this.post.onThirdCall().callsArgWith(1, null, rsp);
+            this.post.callsArgWith(1, null, rsp);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
                 assert.equal(err.message, 'Signin failed');
                 done();
             });
         });
         it(`should set dashboard endpoint from signin endpoint on success`, function (done) {
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
                 assert(smartcare.config.endpoints.dashboard.startsWith('https://si.sc.com'));
                 done();
             });
         });
         it(`should set dashboard endpoint without signin endpoint path on success`, function (done) {
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
                 assert(!smartcare.config.endpoints.dashboard.includes('path'));
                 done();
             });
         });
         it(`should include Location in dashboard endpoint on success`, function (done) {
-            smartcare.login('un', 'pw', (err, rsp) => {
-                assert(smartcare.config.endpoints.dashboard.endsWith(validThirdResponse.headers['Location']));
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
+                assert(smartcare.config.endpoints.dashboard.endsWith(validResponse.headers['Location']));
                 done();
             });
         });
         it(`should succeed with message body`, function (done) {
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.dashboardLogin(validAuth, (err, rsp) => {
                 assert(!err);
                 done();
             });
@@ -363,7 +434,7 @@ describe('login()', function() {
             config.verbose = true;
             var t3client = new SmartCare(config);
 
-            t3client.login('un', 'pw', (err, rsp) => {
+            t3client.dashboardLogin(validAuth, (err, rsp) => {
                 assert(!err);
                 done();
             });
@@ -391,7 +462,7 @@ describe('isAuthenticated', function () {
         var body = { test: 'aaa' };
         this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
 
-        smartcare.login('un', 'pw', (err, rsp) => {
+        smartcare.t3login('un', 'pw', (err, rsp) => {
             assert(!smartcare.isAuthenticated);
             done();
         });
@@ -401,7 +472,7 @@ describe('isAuthenticated', function () {
             var body = { test: 'aaa' };
             this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
 
-            smartcare.login('un', 'pw', (err, rsp) => {
+            smartcare.t3login('un', 'pw', (err, rsp) => {
                 assert(!smartcare.isAuthenticated);
                 done();
             });
@@ -411,7 +482,7 @@ describe('isAuthenticated', function () {
         var body = { T3Token: 'aaa' };
         this.post.onSecondCall().callsArgWith(1, null, validSecondResponse, body);
 
-        smartcare.login('un', 'pw', (err, rsp) => {
+        smartcare.t3login('un', 'pw', (err, rsp) => {
             assert(smartcare.isAuthenticated);
             done();
         });
